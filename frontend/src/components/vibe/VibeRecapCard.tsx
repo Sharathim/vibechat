@@ -44,6 +44,12 @@ export default function VibeRecapCard({
                   width: '100%', height: '100%',
                   objectFit: 'cover', display: 'block',
                 }}
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement
+                  target.style.display = 'none'
+                  target.parentElement!.style.background =
+                    'linear-gradient(135deg, var(--brand-subtle), var(--brand-border))'
+                }}
               />
             </div>
           ))

@@ -5,6 +5,7 @@ import {
 	HelpCircle, LogOut, ChevronRight
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
+import authApi from '../../api/auth'
 
 const settingsItems = [
 	{
@@ -50,9 +51,15 @@ export default function SettingsPage() {
 	const [showLogoutConfirm, setShowLogoutConfirm] =
 		useState(false)
 
-	const handleLogout = () => {
-		logout()
-		navigate('/login')
+	const handleLogout = async () => {
+		try {
+			await authApi.logout()
+		} catch (err) {
+			console.error('Logout error:', err)
+		} finally {
+			logout()
+			navigate('/login')
+		}
 	}
 
 	return (

@@ -4,6 +4,7 @@ import { Mail, Lock, Eye, EyeOff, Music } from 'lucide-react'
 import OTPInput from '../../components/auth/OTPInput'
 import PasswordStrengthBar from '../../components/auth/PasswordStrengthBar'
 import { maskEmail } from '../../lib/utils'
+import authApi from '../../api/auth'
 
 type Step = 1 | 2 | 3
 
@@ -31,9 +32,16 @@ export default function ForgotPasswordPage() {
       return
     }
     setIsLoading(true)
-    await new Promise(r => setTimeout(r, 800))
-    setIsLoading(false)
-    setStep(2)
+    try {
+      await authApi.forgotPassword(email)
+      setStep(2)
+    } catch (err: any) {
+      setEmailError(
+        err.response?.data?.error || 'Failed to send OTP'
+      )
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleVerifyOTP = async (e: React.FormEvent) => {
@@ -43,9 +51,16 @@ export default function ForgotPasswordPage() {
       return
     }
     setIsLoading(true)
-    await new Promise(r => setTimeout(r, 800))
-    setIsLoading(false)
-    setStep(3)
+    try {
+      await authApi.verifyOTP(email, otp, 'password_reset')
+      setStep(3)
+    } catch (err: any) {
+      setOtpError(
+        err.response?.data?.error || 'Incorrect OTP'
+      )
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleReset = async (e: React.FormEvent) => {
@@ -59,10 +74,17 @@ export default function ForgotPasswordPage() {
       return
     }
     setIsLoading(true)
-    await new Promise(r => setTimeout(r, 1000))
-    setIsLoading(false)
-    setIsDone(true)
-    setTimeout(() => navigate('/login'), 2000)
+    try {
+      await authApi.resetPassword(email, newPassword)
+      setIsDone(true)
+      setTimeout(() => navigate('/login'), 2000)
+    } catch (err: any) {
+      setFormError(
+        err.response?.data?.error || 'Failed to reset password'
+      )
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const StepIndicator = () => (

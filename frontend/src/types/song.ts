@@ -1,12 +1,13 @@
-import type { User } from './user'
-
 export interface Song {
   id: number
-  youtubeId: string
+  youtubeId?: string
+  youtube_id?: string
   title: string
   artist: string
   thumbnailUrl: string
+  thumbnail_url?: string
   audioUrl: string | null
+  s3_audio_url?: string | null
   duration: number
 }
 
@@ -31,6 +32,11 @@ export interface SearchHistoryItem {
   id: number
   type: 'song' | 'user'
   song?: Song
-  user?: Pick<User, 'id' | 'name' | 'username' | 'avatarUrl'>
+  user?: {
+    id: number
+    name: string
+    username: string
+    avatarUrl: string | null
+  }
   searchedAt: string
 }

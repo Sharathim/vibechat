@@ -1,22 +1,69 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Bell, Check } from 'lucide-react'
-import { mockNotifications } from '../../data/mockData'
+import notificationsApi from '../../api/notifications'
+import { useSocket } from '../../context/SocketContext'
 import Avatar from './Avatar'
 
 export default function NotificationBell() {
-  const [notifications, setNotifications] = useState(mockNotifications)
+  const [notifications, setNotifications] = useState<any[]>([])
   const [isOpen, setIsOpen] = useState(false)
+  const { socket } = useSocket()
 
-  const unreadCount = notifications.filter(n => !n.isRead).length
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        const res = await notificationsApi.getNotifications()
+        setNotifications(res.data.notifications || [])
+      } catch (err) {
+        // User might not be logged in yet
+      }
+    }
 
-  const markAllRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })))
+    // Fetch immediately
+    fetchNotifications()
+
+    // Poll every 10 seconds
+    const interval = setInterval(fetchNotifications, 10000)
+
+    return () => clearInterval(interval)
+  }, [])
+
+  useEffect(() => {
+    if (!socket) return
+
+    socket.on('new_notification', (notification: any) => {
+      setNotifications(prev => [notification, ...prev])
+    })
+
+    return () => {
+      socket.off('new_notification')
+    }
+  }, [socket])
+
+  const unreadCount = notifications.filter(
+    (n: any) => !n.is_read
+  ).length
+
+  const markAllRead = async () => {
+    try {
+      await notificationsApi.markAllRead()
+      setNotifications(prev =>
+        prev.map(n => ({ ...n, is_read: true }))
+      )
+    } catch (err) {
+      console.error('Mark all read error:', err)
+    }
   }
 
-  const markRead = (id: number) => {
-    setNotifications(prev =>
-      prev.map(n => n.id === id ? { ...n, isRead: true } : n)
-    )
+  const markRead = async (id: number) => {
+    try {
+      await notificationsApi.markRead(id)
+      setNotifications(prev =>
+        prev.map(n => n.id === id ? { ...n, is_read: true } : n)
+      )
+    } catch (err) {
+      console.error('Mark read error:', err)
+    }
   }
 
   return (
@@ -141,7 +188,7 @@ export default function NotificationBell() {
                   You are all caught up!
                 </div>
               ) : (
-                notifications.map(notification => (
+                notifications.map((notification: any) => (
                   <div
                     key={notification.id}
                     onClick={() => markRead(notification.id)}
@@ -150,10 +197,10 @@ export default function NotificationBell() {
                       alignItems: 'center',
                       gap: 12,
                       padding: '12px 16px',
-                      background: notification.isRead
+                      background: notification.is_read
                         ? 'transparent'
                         : 'var(--brand-subtle)',
-                      borderLeft: notification.isRead
+                      borderLeft: notification.is_read
                         ? 'none'
                         : '3px solid var(--brand-primary)',
                       cursor: 'pointer',
@@ -161,8 +208,8 @@ export default function NotificationBell() {
                     }}
                   >
                     <Avatar
-                      src={notification.fromUser.avatarUrl}
-                      name={notification.fromUser.name}
+                      src={notification.from_avatar || null}
+                      name={notification.from_name || 'User'}
                       size={40}
                     />
                     <div style={{ flex: 1 }}>
@@ -173,7 +220,7 @@ export default function NotificationBell() {
                           fontWeight: 500,
                         }}
                       >
-                        <strong>{notification.fromUser.name}</strong>
+                        <strong>{notification.from_name || 'Someone'}</strong>
                         {' '}{notification.message}
                       </span>
                       <div
@@ -183,10 +230,10 @@ export default function NotificationBell() {
                           marginTop: 2,
                         }}
                       >
-                        {notification.createdAt}
+                        {notification.created_at}
                       </div>
                     </div>
-                    {!notification.isRead && (
+                    {!notification.is_read && (
                       <div
                         style={{
                           width: 8,

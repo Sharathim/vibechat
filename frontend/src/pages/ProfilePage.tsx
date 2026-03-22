@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Settings, Share2, Edit2, Music } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import ProfileHeader from '../components/profile/ProfileHeader'
 import StatRow from '../components/profile/StatRow'
 import EditProfileForm from '../components/profile/EditProfileForm'
 import { mockCurrentUser } from '../data/mockData'
+import usersApi from '../api/users'
 import type { User } from '../types/user'
 import { useAuth } from '../context/AuthContext'
 
@@ -15,6 +16,32 @@ export default function ProfilePage() {
   const [isEditing, setIsEditing] = useState(false)
   const [showFollowers, setShowFollowers] = useState(false)
   const [showFollowing, setShowFollowing] = useState(false)
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const res = await usersApi.getMyProfile()
+        const profileData = res.data.user
+        setUser({
+          id: profileData.id,
+          username: profileData.username,
+          name: profileData.name,
+          email: profileData.gmail || '',
+          avatarUrl: profileData.avatar_url || null,
+          rankBadge: profileData.rank_badge || 1,
+          bio: profileData.bio || '',
+          isPrivate: profileData.is_private ?? true,
+          followers: profileData.followers_count || 0,
+          following: profileData.following_count || 0,
+          vibes: profileData.vibes_count || 0,
+        })
+      } catch (err) {
+        console.error('Profile fetch error:', err)
+      }
+    }
+
+    fetchProfile()
+  }, [])
 
   const handleSave = (updates: Partial<User>) => {
     const updated = { ...user, ...updates }

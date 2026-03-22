@@ -8,6 +8,7 @@ import type { Song } from '../types/song'
 import type { User } from '../types/user'
 import { useDebounce } from '../hooks/useDebounce'
 import { useMusic } from '../context/MusicContext'
+import searchApi from '../api/search'
 
 type SearchMode = 'song' | 'user'
 
@@ -52,23 +53,25 @@ export default function SearchPage() {
 
     setIsSearching(true)
 
-    // Simulate API search
-    setTimeout(() => {
-      if (mode === 'song') {
-        const results = mockSongs.filter(s =>
-          s.title.toLowerCase().includes(debouncedQuery.toLowerCase()) ||
-          s.artist.toLowerCase().includes(debouncedQuery.toLowerCase())
-        )
-        setSongResults(results)
-      } else {
-        const results = mockUsers.filter(u =>
-          u.username.toLowerCase().includes(debouncedQuery.toLowerCase()) ||
-          u.name.toLowerCase().includes(debouncedQuery.toLowerCase())
-        )
-        setUserResults(results)
+    const doSearch = async () => {
+      try {
+        if (mode === 'song') {
+          const res = await searchApi.searchSongs(debouncedQuery)
+          setSongResults(res.data.songs || [])
+        } else {
+          const res = await searchApi.searchUsers(debouncedQuery)
+          setUserResults(res.data.users || [])
+        }
+      } catch (err) {
+        console.error('Search error:', err)
+        setSongResults([])
+        setUserResults([])
+      } finally {
+        setIsSearching(false)
       }
-      setIsSearching(false)
-    }, 500)
+    }
+
+    doSearch()
   }, [debouncedQuery, mode])
 
   const handleModeChange = (newMode: SearchMode) => {

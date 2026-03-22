@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Phone, Music } from 'lucide-react'
 import MessageBubble from '../components/chat/MessageBubble'
@@ -7,8 +7,11 @@ import ThreeDotMenu from '../components/chat/ThreeDotMenu'
 import Avatar from '../components/common/Avatar'
 import MiniPlayer from '../components/common/MiniPlayer'
 import { useVibe } from '../context/VibeContext'
+import chatApi from '../api/chat'
+import { useSocket } from '../context/SocketContext'
+import { useAuth } from '../context/AuthContext'
 import type { VibeSessionData } from '../types/vibe'
-import { mockConversations, mockMessages, mockSongs } from '../data/mockData'
+import { mockConversations, mockSongs } from '../data/mockData'
 import type { Message } from '../types/chat'
 
 export default function ConversationPage() {
@@ -20,11 +23,54 @@ export default function ConversationPage() {
     c => c.id === Number(conversationId)
   )
 
-  const [messages, setMessages] = useState<Message[]>(
-    mockMessages.filter(m => m.conversationId === Number(conversationId))
-  )
+  const [messages, setMessages] = useState<Message[]>([])
+
+  const { socket } = useSocket()
+  const { user } = useAuth()
 
   const { startSession, isActive } = useVibe()
+
+  useEffect(() => {
+    if (!conversationId) return
+
+    const convId = Number(conversationId)
+
+    const loadMessages = async () => {
+      try {
+        const res = await chatApi.getMessages(convId)
+        setMessages(res.data.messages || [])
+      } catch (err) {
+        console.error('Failed to load messages:', err)
+      }
+    }
+
+    loadMessages()
+
+    // Join socket room
+    if (socket) {
+      socket.emit('join_conversation', {
+        conversation_id: convId
+      })
+
+      socket.on('receive_message', (msg: Message) => {
+        setMessages(prev => [...prev, msg])
+      })
+
+      socket.on('user_typing', (_data: any) => {
+        // Handle typing indicator later
+      })
+    }
+
+    return () => {
+      if (socket) {
+        socket.emit('leave_conversation', {
+          conversation_id: convId
+        })
+        socket.off('receive_message')
+        socket.off('user_typing')
+      }
+    }
+  }, [conversationId, socket])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -66,21 +112,28 @@ export default function ConversationPage() {
     startSession(session)
   }
 
-  const handleSend = (text: string) => {
-    const newMsg: Message = {
-      id: Date.now(),
-      conversationId: conversation.id,
-      senderId: 1,
-      type: 'text',
-      content: text,
-      isRead: false,
-      createdAt: new Date().toLocaleTimeString([], {
-        hour: '2-digit',
-        minute: '2-digit',
-      }),
+  const handleSend = useCallback(async (text: string) => {
+    if (!text.trim() || !conversationId) return
+    const convId = Number(conversationId)
+
+    try {
+      // Send via socket for real-time
+      if (socket && user) {
+        socket.emit('send_message', {
+          conversation_id: convId,
+          sender_id: user.id,
+          content: text,
+          type: 'text',
+        })
+      } else {
+        // Fallback to REST
+        const res = await chatApi.sendMessage(convId, text)
+        setMessages(prev => [...prev, res.data.message])
+      }
+    } catch (err) {
+      console.error('Send message error:', err)
     }
-    setMessages(prev => [...prev, newMsg])
-  }
+  }, [conversationId, socket, user])
 
   return (
     <div style={{
@@ -199,7 +252,14 @@ export default function ConversationPage() {
             onTurnOffVibe={() => {}}
             onViewVibes={() => {}}
             onRemoveChat={() => navigate('/chat')}
-            onClearChat={() => setMessages([])}
+            onClearChat={async () => {
+              try {
+                await chatApi.clearChat(Number(conversationId))
+                setMessages([])
+              } catch (err) {
+                setMessages([])
+              }
+            }}
           />
         </div>
       </header>

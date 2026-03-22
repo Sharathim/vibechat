@@ -1,17 +1,31 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { Edit, Search, X, MessageCircle } from 'lucide-react'
 import ConversationItem from '../components/chat/ConversationItem'
 import { mockConversations, mockUsers } from '../data/mockData'
 import type { Conversation } from '../types/chat'
 import { Outlet } from 'react-router-dom'
+import chatApi from '../api/chat'
 
 export default function ChatPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const [conversations] =
-    useState<Conversation[]>(mockConversations)
+  const [conversations, setConversations] = useState<Conversation[]>([])
   const [searchQuery, setSearchQuery] = useState('')
+
+  useEffect(() => {
+    const fetchConversations = async () => {
+      try {
+        const res = await chatApi.getConversations()
+        setConversations(res.data.conversations || [])
+      } catch (err) {
+        console.error('Failed to load conversations:', err)
+        // Fall back to mock data in development
+        setConversations(mockConversations)
+      }
+    }
+    fetchConversations()
+  }, [])
 
   const isConversationOpen = location.pathname !== '/chat'
 

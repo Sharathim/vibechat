@@ -3,7 +3,8 @@ import { useNavigate, Link } from 'react-router-dom'
 import { Eye, EyeOff, Music, Mail, User, AtSign, Lock } from 'lucide-react'
 import OTPInput from '../../components/auth/OTPInput'
 import PasswordStrengthBar from '../../components/auth/PasswordStrengthBar'
-import { generateUsernameSuggestions, maskEmail } from '../../lib/utils'
+import { maskEmail } from '../../lib/utils'
+import authApi from '../../api/auth'
 
 type Step = 1 | 2 | 3
 
@@ -43,10 +44,23 @@ export default function RegisterPage() {
     }
     setEmailError('')
     setIsLoading(true)
-    await new Promise(r => setTimeout(r, 800))
-    setIsLoading(false)
-    setStep(2)
-    startCountdown()
+    try {
+      const checkRes = await authApi.checkEmail(email)
+      if (checkRes.data.exists) {
+        setEmailError('An account with this email already exists')
+        setIsLoading(false)
+        return
+      }
+      await authApi.sendOTP(email, 'registration')
+      setStep(2)
+      startCountdown()
+    } catch (err: any) {
+      setEmailError(
+        err.response?.data?.error || 'Failed to send OTP'
+      )
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const startCountdown = () => {
@@ -67,9 +81,17 @@ export default function RegisterPage() {
     }
     setOtpError('')
     setIsLoading(true)
-    await new Promise(r => setTimeout(r, 800))
-    setIsLoading(false)
-    setStep(3)
+    try {
+      await authApi.verifyOTP(email, otp, 'registration')
+      setStep(3)
+    } catch (err: any) {
+      setOtpError(
+        err.response?.data?.error || 'Incorrect OTP'
+      )
+      setOtpError('error')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleUsernameChange = (val: string) => {
@@ -77,13 +99,18 @@ export default function RegisterPage() {
     setSuggestions([])
     if (!val) { setUsernameStatus('idle'); return }
     setUsernameStatus('checking')
-    setTimeout(() => {
-      // Mock: "taken" is always taken
-      if (val.toLowerCase() === 'taken') {
-        setUsernameStatus('taken')
-        setSuggestions(generateUsernameSuggestions(val))
-      } else {
-        setUsernameStatus('available')
+    setTimeout(async () => {
+      try {
+        const res = await authApi.checkUsername(val)
+        if (res.data.available) {
+          setUsernameStatus('available')
+          setSuggestions([])
+        } else {
+          setUsernameStatus('taken')
+          setSuggestions(res.data.suggestions || [])
+        }
+      } catch {
+        setUsernameStatus('idle')
       }
     }, 500)
   }
@@ -110,9 +137,21 @@ export default function RegisterPage() {
     }
 
     setIsLoading(true)
-    await new Promise(r => setTimeout(r, 1000))
-    setIsLoading(false)
-    navigate('/login')
+    try {
+      await authApi.register({
+        gmail: email,
+        username,
+        name,
+        password,
+      })
+      navigate('/login')
+    } catch (err: any) {
+      setFormError(
+        err.response?.data?.error || 'Registration failed'
+      )
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const formatCountdown = (s: number) => {

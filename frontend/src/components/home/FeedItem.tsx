@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Play, Heart, Plus, Share2 } from 'lucide-react'
 import type { FeedItem as FeedItemType } from '../../types/feed'
 import { useMusic } from '../../context/MusicContext'
+import { getThumbnailUrl } from '../../lib/thumbnail'
 
 interface FeedItemProps {
   item: FeedItemType
@@ -27,10 +28,11 @@ export default function FeedItem({ item, onLike, showDivider }: FeedItemProps) {
   const handlePlay = () => {
     play({
       id: item.song.id,
+      youtubeId: (item.song as any).youtube_id || item.song.youtubeId || '',
       title: item.song.title,
       artist: item.song.artist,
-      thumbnailUrl: item.song.thumbnailUrl,
-      audioUrl: item.song.audioUrl,
+      thumbnailUrl: (item.song as any).thumbnail_url || item.song.thumbnailUrl || '',
+      audioUrl: (item.song as any).s3_audio_url || item.song.audioUrl || null,
       duration: item.song.duration,
     })
   }
@@ -46,13 +48,19 @@ export default function FeedItem({ item, onLike, showDivider }: FeedItemProps) {
         background: 'var(--bg-tertiary)',
       }}>
         <img
-          src={item.song.thumbnailUrl}
+          src={getThumbnailUrl(item.song.thumbnailUrl)}
           alt={item.song.title}
           style={{
             width: '100%',
             height: '100%',
             objectFit: 'cover',
             display: 'block',
+          }}
+          onError={(e) => {
+            const target = e.target as HTMLImageElement
+            target.style.display = 'none'
+            target.parentElement!.style.background =
+              'linear-gradient(135deg, var(--brand-subtle), var(--brand-border))'
           }}
         />
 

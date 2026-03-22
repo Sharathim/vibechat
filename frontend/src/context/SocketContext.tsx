@@ -1,33 +1,80 @@
-import { createContext, useContext, useEffect, useRef } from 'react'
+import {
+  createContext, useContext,
+  useEffect, useRef, useState
+} from 'react'
+import { io, Socket } from 'socket.io-client'
 import { useAuth } from './AuthContext'
 
 interface SocketContextType {
-	socket: any
-	isConnected: boolean
+  socket: Socket | null
+  isConnected: boolean
 }
 
 const SocketContext = createContext<SocketContextType>({
-	socket: null,
-	isConnected: false,
+  socket: null,
+  isConnected: false,
 })
 
-export function SocketProvider({ children }: { children: React.ReactNode }) {
-	const socketRef = useRef<any>(null)
-	const { isLoggedIn } = useAuth()
+export function SocketProvider({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  const socketRef = useRef<Socket | null>(null)
+  const [isConnected, setIsConnected] = useState(false)
+  const { isLoggedIn, user } = useAuth()
 
-	// Socket.IO will be connected in Module 19 (Chat backend)
-	// For now this is a mock provider
+  useEffect(() => {
+    if (!isLoggedIn || !user) {
+      if (socketRef.current) {
+        socketRef.current.disconnect()
+        socketRef.current = null
+        setIsConnected(false)
+      }
+      return
+    }
 
-	return (
-		<SocketContext.Provider value={{
-			socket: socketRef.current,
-			isConnected: false,
-		}}>
-			{children}
-		</SocketContext.Provider>
-	)
+    // Connect to backend
+    const socket = io('http://localhost:5000', {
+      withCredentials: true,
+      transports: ['polling'],
+      upgrade: false,
+    })
+
+    socket.on('connect', () => {
+      setIsConnected(true)
+      // Tell server who we are
+      socket.emit('user_online', { user_id: user.id })
+    })
+
+    socket.on('disconnect', () => {
+      setIsConnected(false)
+    })
+
+    socket.on('connect_error', (err) => {
+      console.error('Socket connection error:', err)
+      setIsConnected(false)
+    })
+
+    socketRef.current = socket
+
+    return () => {
+      socket.disconnect()
+      socketRef.current = null
+      setIsConnected(false)
+    }
+  }, [isLoggedIn, user?.id])
+
+  return (
+    <SocketContext.Provider value={{
+      socket: socketRef.current,
+      isConnected,
+    }}>
+      {children}
+    </SocketContext.Provider>
+  )
 }
 
 export function useSocket() {
-	return useContext(SocketContext)
+  return useContext(SocketContext)
 }

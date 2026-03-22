@@ -116,6 +116,12 @@ export default function VibeRecapExpanded({
                   src={song.thumbnailUrl}
                   alt={song.title}
                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement
+                    target.style.display = 'none'
+                    target.parentElement!.style.background =
+                      'linear-gradient(135deg, var(--brand-subtle), var(--brand-border))'
+                  }}
                 />
               </div>
               <div style={{ flex: 1, overflow: 'hidden' }}>
@@ -134,10 +140,12 @@ export default function VibeRecapExpanded({
               <div style={{ display: 'flex', gap: 4 }}>
                 <button
                   onClick={() => play({
-                    id: song.id, title: song.title,
+                    id: song.id,
+                    youtubeId: (song as any).youtube_id || song.youtubeId || '',
+                    title: song.title,
                     artist: song.artist,
-                    thumbnailUrl: song.thumbnailUrl,
-                    audioUrl: song.audioUrl,
+                    thumbnailUrl: (song as any).thumbnail_url || song.thumbnailUrl || '',
+                    audioUrl: (song as any).s3_audio_url || song.audioUrl || null,
                     duration: song.duration,
                   })}
                   style={{

@@ -58,10 +58,11 @@ export default function MusicPage() {
     const randomIndex = Math.floor(Math.random() * allSongs.length)
     play({
       id: allSongs[randomIndex].id,
+      youtubeId: (allSongs[randomIndex] as any).youtube_id || allSongs[randomIndex].youtubeId || '',
       title: allSongs[randomIndex].title,
       artist: allSongs[randomIndex].artist,
-      thumbnailUrl: allSongs[randomIndex].thumbnailUrl,
-      audioUrl: allSongs[randomIndex].audioUrl,
+      thumbnailUrl: (allSongs[randomIndex] as any).thumbnail_url || allSongs[randomIndex].thumbnailUrl || '',
+      audioUrl: (allSongs[randomIndex] as any).s3_audio_url || allSongs[randomIndex].audioUrl || null,
       duration: allSongs[randomIndex].duration,
     })
   }
@@ -492,10 +493,11 @@ export default function MusicPage() {
                 }
                 onClick={() => play({
                   id: item.song.id,
+                  youtubeId: (item.song as any).youtube_id || item.song.youtubeId || '',
                   title: item.song.title,
                   artist: item.song.artist,
-                  thumbnailUrl: item.song.thumbnailUrl,
-                  audioUrl: item.song.audioUrl,
+                  thumbnailUrl: (item.song as any).thumbnail_url || item.song.thumbnailUrl || '',
+                  audioUrl: (item.song as any).s3_audio_url || item.song.audioUrl || null,
                   duration: item.song.duration,
                 })}
               >

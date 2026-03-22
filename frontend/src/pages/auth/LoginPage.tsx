@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { Eye, EyeOff, Music, Lock, AtSign } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
-import { mockCurrentUser } from '../../data/mockData'
+import authApi from '../../api/auth'
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -28,24 +28,28 @@ export default function LoginPage() {
     }
 
     setIsLoading(true)
-    // Simulate API call
-    await new Promise(r => setTimeout(r, 1000))
-
-    // Mock login — accept any credentials
-    login(mockCurrentUser)
-    navigate('/home')
-    setIsLoading(false)
+    try {
+      const response = await authApi.login(identifier, password)
+      const { user } = response.data
+      login(user)
+      navigate('/home')
+    } catch (err: any) {
+      setError(
+        err.response?.data?.error ||
+        'Login failed. Please try again.'
+      )
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        background: 'var(--bg-primary)',
-        display: 'flex',
-      }}
-    >
-      {/* Left brand panel — desktop only */}
+    <div style={{
+      minHeight: '100vh',
+      background: 'var(--bg-primary)',
+      display: 'flex',
+    }}>
+      {/* Left brand panel desktop only */}
       <div
         className="desktop-only"
         style={{
@@ -60,35 +64,21 @@ export default function LoginPage() {
           overflow: 'hidden',
         }}
       >
-        {/* Background decoration */}
         <div style={{
-          position: 'absolute',
-          width: 400,
-          height: 400,
-          borderRadius: '50%',
-          background: 'rgba(255,255,255,0.05)',
-          top: -100,
-          right: -100,
+          position: 'absolute', width: 400, height: 400,
+          borderRadius: '50%', background: 'rgba(255,255,255,0.05)',
+          top: -100, right: -100,
         }} />
         <div style={{
-          position: 'absolute',
-          width: 300,
-          height: 300,
-          borderRadius: '50%',
-          background: 'rgba(255,255,255,0.05)',
-          bottom: -80,
-          left: -80,
+          position: 'absolute', width: 300, height: 300,
+          borderRadius: '50%', background: 'rgba(255,255,255,0.05)',
+          bottom: -80, left: -80,
         }} />
-
-        {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: 48, zIndex: 1 }}>
           <div style={{
-            width: 72,
-            height: 72,
-            borderRadius: 20,
+            width: 72, height: 72, borderRadius: 20,
             background: 'rgba(255,255,255,0.2)',
-            display: 'flex',
-            alignItems: 'center',
+            display: 'flex', alignItems: 'center',
             justifyContent: 'center',
             margin: '0 auto 16px',
             backdropFilter: 'blur(10px)',
@@ -96,53 +86,29 @@ export default function LoginPage() {
             <Music size={36} color="white" />
           </div>
           <h1 style={{
-            fontFamily: 'Syne, sans-serif',
-            fontSize: 36,
-            fontWeight: 800,
-            color: 'white',
-            marginBottom: 8,
-          }}>
-            VibeChat
-          </h1>
-          <p style={{
-            color: 'rgba(255,255,255,0.8)',
-            fontSize: 16,
-          }}>
+            fontFamily: 'Syne, sans-serif', fontSize: 36,
+            fontWeight: 800, color: 'white', marginBottom: 8,
+          }}>VibeChat</h1>
+          <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: 16 }}>
             Music meets social.
           </p>
         </div>
-
-        {/* Features */}
         {[
           { icon: '🎵', text: 'Stream any song, instantly' },
           { icon: '💬', text: 'Message friends in real-time' },
           { icon: '✨', text: 'Your vibe, your space' },
         ].map(({ icon, text }) => (
-          <div
-            key={text}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
-              marginBottom: 16,
-              zIndex: 1,
-              width: '100%',
-              maxWidth: 280,
-            }}
-          >
+          <div key={text} style={{
+            display: 'flex', alignItems: 'center',
+            gap: 12, marginBottom: 16, zIndex: 1,
+            width: '100%', maxWidth: 280,
+          }}>
             <div style={{
-              width: 40,
-              height: 40,
-              borderRadius: 12,
+              width: 40, height: 40, borderRadius: 12,
               background: 'rgba(255,255,255,0.15)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 20,
-              flexShrink: 0,
-            }}>
-              {icon}
-            </div>
+              display: 'flex', alignItems: 'center',
+              justifyContent: 'center', fontSize: 20, flexShrink: 0,
+            }}>{icon}</div>
             <span style={{ color: 'rgba(255,255,255,0.9)', fontSize: 15 }}>
               {text}
             </span>
@@ -151,99 +117,59 @@ export default function LoginPage() {
       </div>
 
       {/* Right form panel */}
-      <div
-        style={{
-          flex: 1,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: 24,
-        }}
-      >
+      <div style={{
+        flex: 1, display: 'flex',
+        alignItems: 'center', justifyContent: 'center',
+        padding: 24,
+      }}>
         <div style={{ width: '100%', maxWidth: 400 }}>
-
-          {/* Mobile logo */}
-          <div
-            className="mobile-only"
-            style={{ textAlign: 'center', marginBottom: 32 }}
-          >
+          <div className="mobile-only" style={{
+            textAlign: 'center', marginBottom: 32,
+          }}>
             <div style={{
-              width: 56,
-              height: 56,
-              borderRadius: 16,
+              width: 56, height: 56, borderRadius: 16,
               background: 'var(--brand-primary)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              margin: '0 auto 12px',
+              display: 'flex', alignItems: 'center',
+              justifyContent: 'center', margin: '0 auto 12px',
             }}>
               <Music size={28} color="white" />
             </div>
             <h1 style={{
-              fontFamily: 'Syne, sans-serif',
-              fontSize: 24,
+              fontFamily: 'Syne, sans-serif', fontSize: 24,
               color: 'var(--brand-primary)',
-            }}>
-              VibeChat
-            </h1>
+            }}>VibeChat</h1>
           </div>
 
           <h2 style={{
-            fontFamily: 'Syne, sans-serif',
-            fontSize: 28,
-            fontWeight: 700,
-            color: 'var(--text-primary)',
-            marginBottom: 8,
-          }}>
-            Welcome back
-          </h2>
+            fontFamily: 'Syne, sans-serif', fontSize: 28,
+            fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8,
+          }}>Welcome back</h2>
           <p style={{
-            color: 'var(--text-secondary)',
-            marginBottom: 32,
-            fontSize: 15,
-          }}>
-            Sign in to continue
-          </p>
+            color: 'var(--text-secondary)', marginBottom: 32, fontSize: 15,
+          }}>Sign in to continue</p>
 
           <form onSubmit={handleLogin}>
-            {/* Error */}
             {error && (
               <div style={{
                 background: 'var(--error-subtle)',
                 border: '1px solid var(--error)',
-                borderRadius: 10,
-                padding: '10px 14px',
-                fontSize: 14,
-                color: 'var(--error)',
-                marginBottom: 16,
-                animation: 'shake 0.4s ease',
-              }}>
-                {error}
-              </div>
+                borderRadius: 10, padding: '10px 14px',
+                fontSize: 14, color: 'var(--error)',
+                marginBottom: 16, animation: 'shake 0.4s ease',
+              }}>{error}</div>
             )}
 
-            {/* Gmail or Username */}
             <div style={{ marginBottom: 16 }}>
               <label style={{
-                display: 'block',
-                fontSize: 13,
-                fontWeight: 600,
-                color: 'var(--text-secondary)',
-                marginBottom: 6,
-              }}>
-                Gmail or Username
-              </label>
+                display: 'block', fontSize: 13, fontWeight: 600,
+                color: 'var(--text-secondary)', marginBottom: 6,
+              }}>Gmail or Username</label>
               <div style={{ position: 'relative' }}>
-                <AtSign
-                  size={18}
-                  style={{
-                    position: 'absolute',
-                    left: 14,
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    color: 'var(--text-muted)',
-                  }}
-                />
+                <AtSign size={18} style={{
+                  position: 'absolute', left: 14, top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: 'var(--text-muted)',
+                }} />
                 <input
                   className="input"
                   type="text"
@@ -257,28 +183,17 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Password */}
             <div style={{ marginBottom: 8 }}>
               <label style={{
-                display: 'block',
-                fontSize: 13,
-                fontWeight: 600,
-                color: 'var(--text-secondary)',
-                marginBottom: 6,
-              }}>
-                Password
-              </label>
+                display: 'block', fontSize: 13, fontWeight: 600,
+                color: 'var(--text-secondary)', marginBottom: 6,
+              }}>Password</label>
               <div style={{ position: 'relative' }}>
-                <Lock
-                  size={18}
-                  style={{
-                    position: 'absolute',
-                    left: 14,
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    color: 'var(--text-muted)',
-                  }}
-                />
+                <Lock size={18} style={{
+                  position: 'absolute', left: 14, top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: 'var(--text-muted)',
+                }} />
                 <input
                   className="input"
                   type={showPassword ? 'text' : 'password'}
@@ -292,16 +207,11 @@ export default function LoginPage() {
                   type="button"
                   onClick={() => setShowPassword(s => !s)}
                   style={{
-                    position: 'absolute',
-                    right: 14,
-                    top: '50%',
+                    position: 'absolute', right: 14, top: '50%',
                     transform: 'translateY(-50%)',
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    color: 'var(--text-muted)',
-                    padding: 0,
-                    display: 'flex',
+                    background: 'none', border: 'none',
+                    cursor: 'pointer', color: 'var(--text-muted)',
+                    padding: 0, display: 'flex',
                   }}
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -309,21 +219,14 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Forgot password */}
             <div style={{ textAlign: 'right', marginBottom: 24 }}>
-              <Link
-                to="/forgot-password"
-                style={{
-                  fontSize: 13,
-                  color: 'var(--brand-primary)',
-                  fontWeight: 500,
-                }}
-              >
+              <Link to="/forgot-password" style={{
+                fontSize: 13, color: 'var(--brand-primary)', fontWeight: 500,
+              }}>
                 Forgot Password?
               </Link>
             </div>
 
-            {/* Submit */}
             <button
               type="submit"
               className="btn btn-primary btn-full"
@@ -332,39 +235,31 @@ export default function LoginPage() {
               {isLoading ? 'Signing in...' : 'Login'}
             </button>
 
-            {/* Divider */}
             <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
-              margin: '24px 0',
+              display: 'flex', alignItems: 'center',
+              gap: 12, margin: '24px 0',
             }}>
               <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
               <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>or</span>
               <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
             </div>
 
-            {/* Sign up link */}
-            <p style={{ textAlign: 'center', fontSize: 14, color: 'var(--text-secondary)' }}>
+            <p style={{
+              textAlign: 'center', fontSize: 14,
+              color: 'var(--text-secondary)',
+            }}>
               Don't have an account?{' '}
-              <Link
-                to="/register"
-                style={{ color: 'var(--brand-primary)', fontWeight: 600 }}
-              >
-                Sign Up
-              </Link>
+              <Link to="/register" style={{
+                color: 'var(--brand-primary)', fontWeight: 600,
+              }}>Sign Up</Link>
             </p>
           </form>
         </div>
       </div>
 
       <style>{`
-        @media (max-width: 767px) {
-          .desktop-only { display: none !important; }
-        }
-        @media (min-width: 768px) {
-          .mobile-only { display: none !important; }
-        }
+        @media (max-width: 767px) { .desktop-only { display: none !important; } }
+        @media (min-width: 768px) { .mobile-only { display: none !important; } }
       `}</style>
     </div>
   )

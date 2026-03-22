@@ -2,6 +2,7 @@ import { X } from 'lucide-react'
 import type { Song } from '../../types/song'
 import type { User } from '../../types/user'
 import Avatar from '../common/Avatar'
+import { getThumbnailUrl } from '../../lib/thumbnail'
 
 interface SongHistoryItem {
   id: number
@@ -125,9 +126,15 @@ export default function SearchHistory({
                   background: 'var(--bg-tertiary)',
                 }}>
                   <img
-                    src={item.song.thumbnailUrl}
+                    src={getThumbnailUrl(item.song.thumbnailUrl)}
                     alt={item.song.title}
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement
+                      target.style.display = 'none'
+                      target.parentElement!.style.background =
+                        'linear-gradient(135deg, var(--brand-subtle), var(--brand-border))'
+                    }}
                   />
                 </div>
                 <div style={{ overflow: 'hidden' }}>

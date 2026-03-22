@@ -19,10 +19,11 @@ export default function SongResult({
   const handlePlay = () => {
     play({
       id: song.id,
+      youtubeId: (song as any).youtube_id || song.youtubeId || '',
       title: song.title,
       artist: song.artist,
-      thumbnailUrl: song.thumbnailUrl,
-      audioUrl: song.audioUrl,
+      thumbnailUrl: (song as any).thumbnail_url || song.thumbnailUrl || '',
+      audioUrl: (song as any).s3_audio_url || song.audioUrl || null,
       duration: song.duration,
     })
   }
@@ -56,9 +57,15 @@ export default function SongResult({
         background: 'var(--bg-tertiary)',
       }}>
         <img
-          src={song.thumbnailUrl}
+          src={song.thumbnailUrl || undefined}
           alt={song.title}
           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          onError={(e) => {
+            const target = e.target as HTMLImageElement
+            target.style.display = 'none'
+            target.parentElement!.style.background =
+              'linear-gradient(135deg, var(--brand-subtle), var(--brand-border))'
+          }}
         />
       </div>
 

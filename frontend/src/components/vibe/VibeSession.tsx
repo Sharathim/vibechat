@@ -144,6 +144,12 @@ export default function VibeSession() {
               src={currentSong.thumbnailUrl}
               alt={currentSong.title}
               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              onError={(e) => {
+                const target = e.target as HTMLImageElement
+                target.style.display = 'none'
+                target.parentElement!.style.background =
+                  'linear-gradient(135deg, var(--brand-subtle), var(--brand-border))'
+              }}
             />
           </div>
 
