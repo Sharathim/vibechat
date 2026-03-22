@@ -4,6 +4,7 @@ import {
 } from 'react'
 import { io, Socket } from 'socket.io-client'
 import { useAuth } from './AuthContext'
+import { SOCKET_URL } from '../config'
 
 interface SocketContextType {
   socket: Socket | null
@@ -35,7 +36,7 @@ export function SocketProvider({
     }
 
     // Connect to backend
-    const socket = io('http://localhost:5000', {
+    const socket = io(SOCKET_URL, {
       withCredentials: true,
       transports: ['polling'],
       upgrade: false,
