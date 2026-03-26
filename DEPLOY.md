@@ -21,7 +21,7 @@
    | 22   | TCP      | Your IP | SSH |
    | 80   | TCP      | 0.0.0.0/0 | HTTP |
    | 443  | TCP      | 0.0.0.0/0 | HTTPS (optional) |
-   | 5000 | TCP      | 0.0.0.0/0 | Backend API |
+   | 5001 | TCP      | 0.0.0.0/0 | Backend API |
 
 4. Create/select a key pair and download the `.pem` file
 5. Launch and note the **Public IP Address**
@@ -102,8 +102,8 @@ YOUTUBE_API_KEY=your-youtube-api-key
 MAIL_EMAIL=your-email@gmail.com
 MAIL_PASSWORD=your-app-password
 
-VITE_API_URL=http://YOUR_EC2_PUBLIC_IP:5000
-VITE_WS_URL=ws://YOUR_EC2_PUBLIC_IP:5000
+VITE_API_URL=http://YOUR_EC2_PUBLIC_IP:5001
+VITE_WS_URL=ws://YOUR_EC2_PUBLIC_IP:5001
 ```
 
 Press `Ctrl+X`, then `Y`, then `Enter` to save.
@@ -246,7 +246,7 @@ sudo kill -9 <PID>
 │  ┌──────────────┐      ┌──────────────────────────┐ │
 │  │   Frontend   │      │        Backend           │ │
 │  │   (nginx)    │─────▶│        (Flask)           │ │
-│  │   Port 80    │      │        Port 5000         │ │
+│  │   Port 80    │      │        Port 5001         │ │
 │  └──────────────┘      └───────────┬──────────────┘ │
 │                                    │                 │
 └────────────────────────────────────┼─────────────────┘

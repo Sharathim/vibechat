@@ -22,11 +22,11 @@ COPY . .
 RUN mkdir -p /app/database
 
 # Expose port
-EXPOSE 5000
+EXPOSE 5001
 
 # Environment variables
 ENV FLASK_ENV=production
 ENV PYTHONUNBUFFERED=1
 
 # Run with gunicorn + eventlet for production
-CMD ["gunicorn", "--worker-class", "eventlet", "-w", "1", "--bind", "0.0.0.0:5000", "app:create_app()"]
+CMD ["gunicorn", "--worker-class", "eventlet", "-w", "1", "--bind", "0.0.0.0:5001", "app:create_app()"]
