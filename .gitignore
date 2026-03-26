@@ -29,3 +29,5 @@ desktop.ini
 # ── LOGS ──────────────────────────────
 *.log
 npm-debug.log*
+
+firebase-credentials.json

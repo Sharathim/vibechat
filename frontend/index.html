@@ -6,12 +6,20 @@
     <meta http-equiv="Content-Security-Policy"
       content="default-src 'self' 'unsafe-inline' 'unsafe-eval'
       http://localhost:5000 https://localhost:5000
-      https://*.googleapis.com https://*.gstatic.com
-      https://*.ytimg.com https://i.ytimg.com;
+      https://*.googleapis.com https://apis.google.com
+      https://*.gstatic.com https://*.firebaseapp.com
+      https://*.firebase.google.com https://*.ytimg.com https://i.ytimg.com;
+      script-src 'self' 'unsafe-inline' 'unsafe-eval'
+      https://*.googleapis.com https://apis.google.com
+      https://*.gstatic.com https://*.firebaseapp.com;
+      worker-src 'self' blob:;
       img-src * data: blob:;
       connect-src 'self' http://localhost:5000
       ws://localhost:5000 wss://localhost:5000
-      https://*.googleapis.com;">
+      https://*.googleapis.com https://*.firebaseio.com
+      https://*.firebaseapp.com https://identitytoolkit.googleapis.com
+      https://securetoken.googleapis.com;
+      frame-src 'self' https://*.firebaseapp.com https://accounts.google.com;">
 
     <!-- PWA Meta -->
     <meta name="theme-color" content="#7C3AED" />
@@ -26,6 +34,7 @@
     <!-- Icons -->
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <link rel="icon" href="favicon.ico">
 
     <title>VibeChat</title>
   </head>

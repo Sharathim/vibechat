@@ -1,10 +1,15 @@
 -- ── USERS ─────────────────────────────────────────
+-- Email is the PRIMARY identifier for account merging
+-- password_hash is NULL for Google-only users
+-- google_id is NULL for email-only users
+-- Both can be set for linked accounts
 CREATE TABLE IF NOT EXISTS users (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-    gmail               TEXT UNIQUE NOT NULL,
+    email               TEXT UNIQUE NOT NULL,
     username            TEXT UNIQUE NOT NULL,
     name                TEXT NOT NULL,
-    password_hash       TEXT NOT NULL,
+    password_hash       TEXT,              -- NULL for Google-only users
+    google_id           TEXT UNIQUE,       -- Firebase UID, NULL for email-only users
     rank_badge          INTEGER UNIQUE,
     created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
     last_login          DATETIME,
@@ -45,7 +50,7 @@ CREATE TABLE IF NOT EXISTS user_settings (
 -- ── OTP VERIFICATIONS ─────────────────────────────
 CREATE TABLE IF NOT EXISTS otp_verifications (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    gmail       TEXT NOT NULL,
+    email       TEXT NOT NULL,
     otp_hash    TEXT NOT NULL,
     purpose     TEXT NOT NULL,
     created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -274,8 +279,9 @@ CREATE TABLE IF NOT EXISTS blocked_vibe_users (
 );
 
 -- ── INDEXES ───────────────────────────────────────
-CREATE INDEX IF NOT EXISTS idx_users_gmail ON users(gmail);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id);
 CREATE INDEX IF NOT EXISTS idx_follows_follower ON follows(follower_id);
 CREATE INDEX IF NOT EXISTS idx_follows_following ON follows(following_id);
 CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id);

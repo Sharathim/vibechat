@@ -34,6 +34,10 @@ export const authApi = {
 
   me: () =>
     client.get('/auth/me'),
+
+  // Google OAuth login - send Firebase ID token to backend for verification
+  googleLogin: (idToken: string) =>
+    client.post('/auth/google', { idToken }),
 }
 
 export default authApi
