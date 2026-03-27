@@ -21,14 +21,14 @@ def create_app():
 
     # CORS
     CORS(app,
-         origins=[Config.FRONTEND_URL],
+            origins=Config.FRONTEND_URLS,
          supports_credentials=True)
 
     # Extensions
     bcrypt.init_app(app)
     mail.init_app(app)
     socketio.init_app(app,
-                      cors_allowed_origins=Config.FRONTEND_URL)
+                      cors_allowed_origins=Config.FRONTEND_URLS)
 
     # Register blueprints
     from modules.auth.routes import auth_bp
@@ -75,6 +75,6 @@ if __name__ == '__main__':
     init_db()
     print("🎵 VibeChat backend starting...")
     socketio.run(app,
-                 host='0.0.0.0',
-                 port=5001,
-                 debug=True)
+                 host=app.config['HOST'],
+                 port=app.config['PORT'],
+                 debug=app.config['FLASK_ENV'] == 'development')

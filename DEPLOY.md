@@ -1,10 +1,25 @@
 # VibeChat - AWS EC2 Deployment Guide
 
+> **Note**: This project has been updated to run without Docker. For the latest production deployment guide, see [PRODUCTION.md](PRODUCTION.md) and [DEPLOYMENT.md](DEPLOYMENT.md).
+
+## Quick Start (New Setup)
+
+The project now uses:
+- **Backend**: Python/Flask running on port 5006
+- **Frontend**: React/Vite running on port 3006  
+- **Proxy**: Nginx reverse proxy on port 80
+- **CI/CD**: GitHub Actions for automatic deployment
+
+For quick start, follow [DEPLOYMENT.md](DEPLOYMENT.md) instead.
+
+---
+
 ## Prerequisites
 - AWS Account
-- EC2 instance (Ubuntu 22.04 recommended, t2.small or larger)
+- EC2 instance (Ubuntu 22.04 recommended, t3.micro free tier or t3.small)
 - S3 bucket (already configured)
 - Firebase project with Google Auth enabled
+- GitHub account for CI/CD
 
 ---
 
@@ -19,9 +34,8 @@
    | Port | Protocol | Source | Description |
    |------|----------|--------|-------------|
    | 22   | TCP      | Your IP | SSH |
-   | 80   | TCP      | 0.0.0.0/0 | HTTP |
+   | 80   | TCP      | 0.0.0.0/0 | HTTP (Nginx) |
    | 443  | TCP      | 0.0.0.0/0 | HTTPS (optional) |
-   | 5001 | TCP      | 0.0.0.0/0 | Backend API |
 
 4. Create/select a key pair and download the `.pem` file
 5. Launch and note the **Public IP Address**

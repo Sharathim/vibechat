@@ -64,7 +64,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     try {
       // Build stream URL through our backend proxy
       const youtubeId = song.youtubeId || song.id.toString()
-      const streamUrl = `http://localhost:5001/api/music/stream/${youtubeId}`
+      const streamUrl = `http://localhost:5006/api/music/stream/${youtubeId}`
 
       audio.src = streamUrl
       audio.load()
