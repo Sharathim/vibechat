@@ -145,35 +145,35 @@ def change_name():
     return jsonify({'success': True, 'name': name})
 
 
-# ── CHANGE USERNAME ───────────────────────────────
-@settings_bp.route('/account/username', methods=['PUT'])
-def change_username():
+# ── CHANGE USERID ───────────────────────────────
+@settings_bp.route('/account/userid', methods=['PUT'])
+def change_userid():
     user, err, code = require_auth()
     if err:
         return err, code
 
     data = request.get_json()
-    username = (data.get('username') or '').strip()
+    userid = (data.get('userid') or '').strip()
 
-    from modules.auth.validators import validate_username
-    valid, msg = validate_username(username)
+    from modules.auth.validators import validate_userid
+    valid, msg = validate_userid(userid)
     if not valid:
         return jsonify({'error': msg}), 400
 
     existing = query_db(
         """SELECT id FROM users
-           WHERE LOWER(username) = LOWER(?) AND id != ?""",
-        (username, user['id']), one=True
+           WHERE LOWER(userid) = LOWER(?) AND id != ?""",
+        (userid, user['id']), one=True
     )
     if existing:
-        return jsonify({'error': 'Username already taken'}), 400
+        return jsonify({'error': 'Userid already taken'}), 400
 
     execute_db(
-        "UPDATE users SET username = ? WHERE id = ?",
-        (username.lower(), user['id'])
+        "UPDATE users SET userid = ? WHERE id = ?",
+        (userid.lower(), user['id'])
     )
 
-    return jsonify({'success': True, 'username': username})
+    return jsonify({'success': True, 'userid': userid})
 
 
 # ── CHANGE PASSWORD ───────────────────────────────

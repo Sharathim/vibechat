@@ -8,8 +8,7 @@ import ProtectedRoute from './components/common/ProtectedRoute'
 import AppShell from './components/common/AppShell'
 
 import LoginPage from './pages/auth/LoginPage'
-import RegisterPage from './pages/auth/RegisterPage'
-import ForgotPasswordPage from './pages/auth/ForgotPasswordPage'
+import CompleteProfilePage from './pages/auth/CompleteProfilePage'
 
 import HomePage from './pages/HomePage'
 import ChatPage from './pages/ChatPage'
@@ -38,8 +37,7 @@ export default function App() {
                 <Routes>
                   {/* Public routes */}
                   <Route path="/login" element={<LoginPage />} />
-                  <Route path="/register" element={<RegisterPage />} />
-                  <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                  <Route path="/complete-profile" element={<CompleteProfilePage />} />
 
                   {/* Protected routes inside AppShell */}
                   <Route element={<ProtectedRoute><AppShell /></ProtectedRoute>}>
@@ -51,7 +49,7 @@ export default function App() {
                     <Route path="/music/playlist/:id" element={<PlaylistPage />} />
                     <Route path="/music/now-playing" element={<NowPlayingPage />} />
                     <Route path="/profile" element={<ProfilePage />} />
-                    <Route path="/profile/:username" element={<UserProfilePage />} />
+                    <Route path="/profile/:userid" element={<UserProfilePage />} />
                     <Route path="/settings" element={<SettingsPage />} />
                     <Route path="/settings/account" element={<AccountSettingsPage />} />
                     <Route path="/settings/privacy" element={<PrivacySettingsPage />} />

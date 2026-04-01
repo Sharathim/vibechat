@@ -1,6 +1,5 @@
 from flask_socketio import SocketIO
 from flask_bcrypt import Bcrypt
-from flask_mail import Mail
 
 socketio = SocketIO(
     cors_allowed_origins="*",
@@ -9,4 +8,3 @@ socketio = SocketIO(
     engineio_logger=False,
 )
 bcrypt = Bcrypt()
-mail = Mail()

@@ -1,19 +1,48 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { MessageCircle, Lock, Music } from 'lucide-react'
 import ProfileHeader from '../components/profile/ProfileHeader'
 import StatRow from '../components/profile/StatRow'
 import FollowButton from '../components/profile/FollowButton'
-import { mockUsers } from '../data/mockData'
+import usersApi from '../api/users'
+import type { User } from '../types/user'
 
 type FollowStatus = 'none' | 'pending' | 'following'
 
 export default function UserProfilePage() {
-  const { username } = useParams()
+  const { userid } = useParams()
   const navigate = useNavigate()
-
-  const user = mockUsers.find(u => u.username === username)
+  const [user, setUser] = useState<User | null>(null)
   const [followStatus, setFollowStatus] = useState<FollowStatus>('none')
+
+  useEffect(() => {
+    if (!userid) return
+
+    const loadProfile = async () => {
+      try {
+        const res = await usersApi.getProfile(userid)
+        const raw = res.data.user
+        setUser({
+          id: raw.id,
+          userid: raw.userid,
+          name: raw.name,
+          email: raw.email || '',
+          avatarUrl: raw.avatar_url || null,
+          rankBadge: raw.rank_badge || 0,
+          bio: raw.bio || '',
+          isPrivate: raw.is_private ?? true,
+          followers: raw.followers_count || 0,
+          following: raw.following_count || 0,
+          vibes: raw.vibes_count || 0,
+        })
+        setFollowStatus((raw.follow_status as FollowStatus) || 'none')
+      } catch {
+        setUser(null)
+      }
+    }
+
+    loadProfile()
+  }, [userid])
 
   if (!user) {
     return (
@@ -38,12 +67,33 @@ export default function UserProfilePage() {
   const isPrivateAndNotFollowing =
     user.isPrivate && followStatus !== 'following'
 
-  const handleFollow = () => {
-    if (followStatus === 'none') setFollowStatus('pending')
-    else if (followStatus === 'pending') setFollowStatus('none')
+  const handleFollow = async () => {
+    if (!user) return
+    const current = followStatus
+    const next = current === 'none' ? 'pending' : 'none'
+    setFollowStatus(next)
+
+    try {
+      if (current === 'none') {
+        await usersApi.followUser(user.id)
+      } else {
+        await usersApi.unfollowUser(user.id)
+      }
+    } catch {
+      setFollowStatus(current)
+    }
   }
 
-  const handleUnfollow = () => setFollowStatus('none')
+  const handleUnfollow = async () => {
+    if (!user) return
+    const current = followStatus
+    setFollowStatus('none')
+    try {
+      await usersApi.unfollowUser(user.id)
+    } catch {
+      setFollowStatus(current)
+    }
+  }
 
   return (
     <div style={{
@@ -89,7 +139,7 @@ export default function UserProfilePage() {
           textAlign: 'center',
           marginRight: 40,
         }}>
-          @{user.username}
+          @{user.userid}
         </span>
       </header>
 

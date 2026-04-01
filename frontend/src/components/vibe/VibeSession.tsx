@@ -7,8 +7,17 @@ import { useVibe } from '../../context/VibeContext'
 import VibeQueue from './VibeQueue'
 import type { VibeQueueItem } from '../../types/vibe'
 import type { Song } from '../../types/song'
-import { mockSongs } from '../../data/mockData'
 import { formatTime } from '../../lib/utils'
+
+const FALLBACK_SONG: Song = {
+  id: 0,
+  youtubeId: '',
+  title: 'No song selected',
+  artist: 'VibeChat',
+  thumbnailUrl: '',
+  audioUrl: null,
+  duration: 0,
+}
 
 export default function VibeSession() {
   const {
@@ -24,7 +33,7 @@ export default function VibeSession() {
 
   if (!session) return null
 
-  const currentSong: Song = (session.currentSong as Song) || mockSongs[0]
+  const currentSong: Song = (session.currentSong as Song) || session.queue[0] || FALLBACK_SONG
   const elapsed = (progress / 100) * currentSong.duration
   const remaining = currentSong.duration - elapsed
 
@@ -336,11 +345,10 @@ export default function VibeSession() {
                 <div
                   key={label}
                   onClick={() => {
-                    const song = mockSongs[
-                      Math.floor(Math.random() * mockSongs.length)
-                    ]
+                    const song = (session.currentSong as Song) || session.queue[0] || FALLBACK_SONG
                     handleAddSong({
                       ...song,
+                      id: Date.now(),
                       addedBy: 'You',
                       position: session.queue.length,
                     })

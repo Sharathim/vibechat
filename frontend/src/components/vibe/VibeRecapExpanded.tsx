@@ -1,6 +1,6 @@
 import { Play, Plus, X } from 'lucide-react'
 import type { VibeRecap } from '../../types/chat'
-import { formatDuration } from '../../data/mockData'
+import { formatDuration } from '../../lib/utils'
 import { useMusic } from '../../context/MusicContext'
 
 interface VibeRecapExpandedProps {

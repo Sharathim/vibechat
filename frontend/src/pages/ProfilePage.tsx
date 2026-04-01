@@ -4,15 +4,49 @@ import { useNavigate } from 'react-router-dom'
 import ProfileHeader from '../components/profile/ProfileHeader'
 import StatRow from '../components/profile/StatRow'
 import EditProfileForm from '../components/profile/EditProfileForm'
-import { mockCurrentUser } from '../data/mockData'
 import usersApi from '../api/users'
 import type { User } from '../types/user'
 import { useAuth } from '../context/AuthContext'
 
+const toProfileUser = (profileData: any): User => ({
+  id: profileData.id,
+  userid: profileData.userid,
+  name: profileData.name,
+  email: profileData.email || '',
+  avatarUrl: profileData.avatar_url || null,
+  rankBadge: profileData.rank_badge || 0,
+  bio: profileData.bio || '',
+  isPrivate: profileData.is_private ?? true,
+  followers: profileData.followers_count || 0,
+  following: profileData.following_count || 0,
+  vibes: profileData.vibes_count || 0,
+})
+
+const defaultProfileUser: User = {
+  id: 0,
+  userid: '',
+  name: '',
+  email: '',
+  avatarUrl: null,
+  rankBadge: 0,
+  bio: '',
+  isPrivate: true,
+  followers: 0,
+  following: 0,
+  vibes: 0,
+}
+
+const fromAuthUser = (authUser: any): User => ({
+  ...defaultProfileUser,
+  ...authUser,
+})
+
 export default function ProfilePage() {
   const navigate = useNavigate()
-  const { updateUser } = useAuth()
-  const [user, setUser] = useState<User>(mockCurrentUser)
+  const { user: authUser, updateUser } = useAuth()
+  const [user, setUser] = useState<User>(() =>
+    authUser ? fromAuthUser(authUser) : defaultProfileUser
+  )
   const [isEditing, setIsEditing] = useState(false)
   const [showFollowers, setShowFollowers] = useState(false)
   const [showFollowing, setShowFollowing] = useState(false)
@@ -21,20 +55,7 @@ export default function ProfilePage() {
     const fetchProfile = async () => {
       try {
         const res = await usersApi.getMyProfile()
-        const profileData = res.data.user
-        setUser({
-          id: profileData.id,
-          username: profileData.username,
-          name: profileData.name,
-          email: profileData.gmail || '',
-          avatarUrl: profileData.avatar_url || null,
-          rankBadge: profileData.rank_badge || 1,
-          bio: profileData.bio || '',
-          isPrivate: profileData.is_private ?? true,
-          followers: profileData.followers_count || 0,
-          following: profileData.following_count || 0,
-          vibes: profileData.vibes_count || 0,
-        })
+        setUser(toProfileUser(res.data.user))
       } catch (err) {
         console.error('Profile fetch error:', err)
       }
@@ -84,7 +105,7 @@ export default function ProfilePage() {
           color: 'var(--text-secondary)',
           fontFamily: 'DM Sans, sans-serif',
         }}>
-          @{user.username}
+          @{user.userid}
         </span>
         <button
           onClick={() => navigate('/settings')}

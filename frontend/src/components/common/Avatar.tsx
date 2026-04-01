@@ -1,4 +1,4 @@
-import { getInitial, getAvatarColor } from '../../data/mockData'
+import { getInitial, getAvatarColor } from '../../lib/utils'
 
 interface AvatarProps {
   src?: string | null

@@ -4,7 +4,7 @@ import { Eye, EyeOff, ChevronRight, AlertTriangle } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import PasswordStrengthBar from '../../components/auth/PasswordStrengthBar'
 
-type SubScreen = 'main' | 'name' | 'username' | 'password' | 'email' | 'delete'
+type SubScreen = 'main' | 'name' | 'userid' | 'password' | 'email' | 'delete'
 
 export default function AccountSettingsPage() {
 	const navigate = useNavigate()
@@ -13,7 +13,7 @@ export default function AccountSettingsPage() {
 
 	const accountItems = [
 		{ label: 'Change Name', screen: 'name' as SubScreen },
-		{ label: 'Change Username', screen: 'username' as SubScreen },
+		{ label: 'Change Userid', screen: 'userid' as SubScreen },
 		{ label: 'Change Password', screen: 'password' as SubScreen },
 		{ label: 'Change Email', screen: 'email' as SubScreen },
 	]
@@ -26,11 +26,11 @@ export default function AccountSettingsPage() {
 		/>
 	}
 
-	if (screen === 'username') {
-		return <ChangeUsernameScreen
-			current={user?.username || ''}
+	if (screen === 'userid') {
+		return <ChangeUseridScreen
+			current={user?.userid || ''}
 			onBack={() => setScreen('main')}
-			onSave={(username) => { updateUser({ username }); setScreen('main') }}
+			onSave={(userid) => { updateUser({ userid }); setScreen('main') }}
 		/>
 	}
 
@@ -227,14 +227,14 @@ function ChangeNameScreen({
 	)
 }
 
-function ChangeUsernameScreen({
+function ChangeUseridScreen({
 	current, onBack, onSave,
 }: { current: string; onBack: () => void; onSave: (v: string) => void }) {
-	const [username, setUsername] = useState(current)
+	const [userid, setUserid] = useState(current)
 	const [status, setStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle')
 
 	const handleChange = (val: string) => {
-		setUsername(val)
+		setUserid(val)
 		if (!val || val === current) { setStatus('idle'); return }
 		setStatus('checking')
 		setTimeout(() => {
@@ -263,10 +263,10 @@ function ChangeUsernameScreen({
 				<h2 style={{
 					fontFamily: 'Syne, sans-serif', fontSize: 17,
 					fontWeight: 700, color: 'var(--text-primary)',
-				}}>Change Username</h2>
+				}}>Change Userid</h2>
 				<button
-					onClick={() => status !== 'taken' && onSave(username)}
-					disabled={status === 'taken' || !username}
+					onClick={() => status !== 'taken' && onSave(userid)}
+					disabled={status === 'taken' || !userid}
 					style={{
 						background: 'none', border: 'none',
 						cursor: status === 'taken' ? 'not-allowed' : 'pointer',
@@ -281,7 +281,7 @@ function ChangeUsernameScreen({
 				<label style={{
 					display: 'block', fontSize: 13, fontWeight: 600,
 					color: 'var(--text-secondary)', marginBottom: 6,
-				}}>Username</label>
+				}}>Userid</label>
 				<div style={{ position: 'relative' }}>
 					<span style={{
 						position: 'absolute', left: 14, top: '50%',
@@ -291,7 +291,7 @@ function ChangeUsernameScreen({
 					<input
 						className={`input ${status === 'taken' ? 'error' : status === 'available' ? 'success' : ''}`}
 						type="text"
-						value={username}
+						value={userid}
 						onChange={e => handleChange(e.target.value)}
 						style={{ paddingLeft: 32 }}
 						maxLength={30}
@@ -312,12 +312,12 @@ function ChangeUsernameScreen({
 				</div>
 				{status === 'available' && (
 					<p style={{ fontSize: 12, color: 'var(--success)', marginTop: 6 }}>
-						Username is available
+						Userid is available
 					</p>
 				)}
 				{status === 'taken' && (
 					<p style={{ fontSize: 12, color: 'var(--error)', marginTop: 6 }}>
-						Username already taken
+						Userid already taken
 					</p>
 				)}
 			</div>

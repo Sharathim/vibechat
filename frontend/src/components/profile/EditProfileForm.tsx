@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Camera } from 'lucide-react'
 import type { User } from '../../types/user'
-import { generateUsernameSuggestions } from '../../lib/utils'
+import { generateUseridSuggestions } from '../../lib/utils'
 
 interface EditProfileFormProps {
   user: User
@@ -15,31 +15,31 @@ export default function EditProfileForm({
   onCancel,
 }: EditProfileFormProps) {
   const [name, setName] = useState(user.name)
-  const [username, setUsername] = useState(user.username)
+  const [userid, setUserid] = useState(user.userid)
   const [bio, setBio] = useState(user.bio)
-  const [usernameStatus, setUsernameStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle')
+  const [useridStatus, setUseridStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle')
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [error, setError] = useState('')
 
   const hasChanges =
     name !== user.name ||
-    username !== user.username ||
+    userid !== user.userid ||
     bio !== user.bio
 
-  const handleUsernameChange = (val: string) => {
-    setUsername(val)
+  const handleUseridChange = (val: string) => {
+    setUserid(val)
     setSuggestions([])
-    if (!val || val === user.username) {
-      setUsernameStatus('idle')
+    if (!val || val === user.userid) {
+      setUseridStatus('idle')
       return
     }
-    setUsernameStatus('checking')
+    setUseridStatus('checking')
     setTimeout(() => {
       if (val.toLowerCase() === 'taken') {
-        setUsernameStatus('taken')
-        setSuggestions(generateUsernameSuggestions(val))
+        setUseridStatus('taken')
+        setSuggestions(generateUseridSuggestions(val))
       } else {
-        setUsernameStatus('available')
+        setUseridStatus('available')
       }
     }, 500)
   }
@@ -50,15 +50,15 @@ export default function EditProfileForm({
       setError('Name must contain alphabets only')
       return
     }
-    if (!username.trim()) {
-      setError('Username cannot be empty')
+    if (!userid.trim()) {
+      setError('Userid cannot be empty')
       return
     }
-    if (usernameStatus === 'taken') {
-      setError('Username is already taken')
+    if (useridStatus === 'taken') {
+      setError('Userid is already taken')
       return
     }
-    onSave({ name: name.trim(), username: username.trim(), bio: bio.trim() })
+    onSave({ name: name.trim(), userid: userid.trim(), bio: bio.trim() })
   }
 
   const labelStyle = {
@@ -107,11 +107,11 @@ export default function EditProfileForm({
         </h2>
         <button
           onClick={handleSave}
-          disabled={!hasChanges || usernameStatus === 'taken'}
+          disabled={!hasChanges || useridStatus === 'taken'}
           style={{
             background: 'none', border: 'none',
             cursor: hasChanges ? 'pointer' : 'not-allowed',
-            color: hasChanges && usernameStatus !== 'taken'
+            color: hasChanges && useridStatus !== 'taken'
               ? 'var(--brand-primary)'
               : 'var(--text-muted)',
             fontSize: 15, fontWeight: 600,
@@ -212,9 +212,9 @@ export default function EditProfileForm({
           </p>
         </div>
 
-        {/* Username */}
+        {/* Userid */}
         <div style={{ marginBottom: 16 }}>
-          <label style={labelStyle}>Username</label>
+          <label style={labelStyle}>Userid</label>
           <div style={{ position: 'relative' }}>
             <span style={{
               position: 'absolute', left: 14, top: '50%',
@@ -222,24 +222,23 @@ export default function EditProfileForm({
               color: 'var(--text-muted)', fontSize: 15,
             }}>@</span>
             <input
-              className={`input ${
-                usernameStatus === 'taken' ? 'error' :
-                usernameStatus === 'available' ? 'success' : ''
-              }`}
+              className={`input ${useridStatus === 'taken' ? 'error' :
+                useridStatus === 'available' ? 'success' : ''
+                }`}
               type="text"
-              value={username}
-              onChange={e => handleUsernameChange(e.target.value)}
+              value={userid}
+              onChange={e => handleUseridChange(e.target.value)}
               style={{ paddingLeft: 32 }}
               maxLength={30}
             />
-            {usernameStatus === 'available' && (
+            {useridStatus === 'available' && (
               <span style={{
                 position: 'absolute', right: 14, top: '50%',
                 transform: 'translateY(-50%)',
                 color: 'var(--success)',
               }}>✓</span>
             )}
-            {usernameStatus === 'taken' && (
+            {useridStatus === 'taken' && (
               <span style={{
                 position: 'absolute', right: 14, top: '50%',
                 transform: 'translateY(-50%)',
@@ -254,8 +253,8 @@ export default function EditProfileForm({
                   key={s}
                   type="button"
                   onClick={() => {
-                    setUsername(s)
-                    setUsernameStatus('available')
+                    setUserid(s)
+                    setUseridStatus('available')
                     setSuggestions([])
                   }}
                   style={{

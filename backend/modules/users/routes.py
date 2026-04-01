@@ -26,7 +26,7 @@ def get_my_profile():
     if err:
         return err, code
 
-    profile = get_user_profile(user['username'], user['id'])
+    profile = get_user_profile(user['userid'], user['id'])
     if not profile:
         return jsonify({'error': 'Profile not found'}), 404
 
@@ -42,10 +42,10 @@ def update_my_profile():
 
     data = request.get_json()
     name = (data.get('name') or '').strip()
-    username = (data.get('username') or '').strip()
+    userid = (data.get('userid') or '').strip()
     bio = (data.get('bio') or '').strip()
 
-    from modules.auth.validators import validate_name, validate_username
+    from modules.auth.validators import validate_name, validate_userid
 
     if name:
         valid, msg = validate_name(name)
@@ -56,21 +56,21 @@ def update_my_profile():
             (name, user['id'])
         )
 
-    if username and username != user['username']:
-        valid, msg = validate_username(username)
+    if userid and userid != user['userid']:
+        valid, msg = validate_userid(userid)
         if not valid:
             return jsonify({'error': msg}), 400
 
         existing = query_db(
-            "SELECT id FROM users WHERE LOWER(username) = LOWER(?) AND id != ?",
-            (username, user['id']), one=True
+            "SELECT id FROM users WHERE LOWER(userid) = LOWER(?) AND id != ?",
+            (userid, user['id']), one=True
         )
         if existing:
-            return jsonify({'error': 'Username already taken'}), 400
+            return jsonify({'error': 'Userid already taken'}), 400
 
         execute_db(
-            "UPDATE users SET username = ? WHERE id = ?",
-            (username.lower(), user['id'])
+            "UPDATE users SET userid = ? WHERE id = ?",
+            (userid.lower(), user['id'])
         )
 
     if bio is not None:
@@ -136,13 +136,13 @@ def upload_avatar():
 
 
 # ── VIEW OTHER PROFILE ────────────────────────────
-@users_bp.route('/profile/<username>', methods=['GET'])
-def get_profile(username):
+@users_bp.route('/profile/<userid>', methods=['GET'])
+def get_profile(userid):
     user, err, code = require_auth()
     if err:
         return err, code
 
-    profile = get_user_profile(username, user['id'])
+    profile = get_user_profile(userid, user['id'])
     if not profile:
         return jsonify({'error': 'User not found'}), 404
 
@@ -234,7 +234,7 @@ def follow_user(target_id):
                 'id': None,
                 'type': 'follow_request',
                 'from_name': user['name'],
-                'from_username': user['username'],
+                'from_userid': user['userid'],
                 'from_avatar': user.get('avatar_url'),
                 'message': 'wants to follow you',
                 'is_read': False,

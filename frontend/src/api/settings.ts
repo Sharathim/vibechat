@@ -16,8 +16,8 @@ export const settingsApi = {
 	changeName: (name: string) =>
 		client.put('/api/settings/account/name', { name }),
 
-	changeUsername: (username: string) =>
-		client.put('/api/settings/account/username', { username }),
+	changeUserid: (userid: string) =>
+		client.put('/api/settings/account/userid', { userid }),
 
 	changePassword: (currentPassword: string, newPassword: string) =>
 		client.put('/api/settings/account/password', {

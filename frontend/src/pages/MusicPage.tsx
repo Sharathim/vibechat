@@ -1,69 +1,169 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Heart, Download, ListMusic, Users,
   Shuffle, ChevronRight, X, Music
 } from 'lucide-react'
 import SongRow from '../components/music/SongRow'
 import PlaylistCard from '../components/music/PlaylistCard'
-import {
-  mockSongs, mockPlaylists, mockHistory,
-  mockCurrentUser
-} from '../data/mockData'
-import type { Song } from '../types/song'
-import type { HistoryItem } from '../types/song'
+import type { Song, Playlist, HistoryItem } from '../types/song'
 import { useMusic } from '../context/MusicContext'
 import Avatar from '../components/common/Avatar'
+import musicApi from '../api/music'
+import usersApi from '../api/users'
+import { useAuth } from '../context/AuthContext'
 
 type Section = 'main' | 'liked' | 'downloads' | 'playlists' | 'shared'
 
+type ProfileChip = {
+  name: string
+  userid: string
+  avatarUrl: string | null
+  rankBadge: number
+}
+
+const mapSong = (song: any): Song => ({
+  id: song.id,
+  youtubeId: song.youtube_id,
+  youtube_id: song.youtube_id,
+  title: song.title,
+  artist: song.artist,
+  thumbnailUrl: song.thumbnail_url || '',
+  thumbnail_url: song.thumbnail_url || '',
+  audioUrl: song.s3_audio_url || null,
+  s3_audio_url: song.s3_audio_url || null,
+  duration: song.duration || 0,
+})
+
+const mapPlaylist = (playlist: any): Playlist => ({
+  id: playlist.id,
+  name: playlist.name,
+  coverUrl: playlist.cover_url || null,
+  songCount: playlist.song_count || 0,
+  isShared: Boolean(playlist.is_shared),
+  sharedWith: playlist.shared_with_name || null,
+  createdAt: playlist.created_at || '',
+})
+
+const mapHistoryItem = (row: any): HistoryItem => ({
+  id: row.history_id || row.id,
+  song: mapSong(row),
+  playedAt: row.played_at || '',
+})
+
 export default function MusicPage() {
   const { play } = useMusic()
+  const { user: authUser } = useAuth()
 
   const [section, setSection] = useState<Section>('main')
-  const [likedSongs, setLikedSongs] = useState<Song[]>(mockSongs.slice(0, 3))
-  const [downloads] = useState<Song[]>(mockSongs.slice(1, 4))
-  const [history, setHistory] = useState<HistoryItem[]>(mockHistory)
-  const [likedSet, setLikedSet] = useState<Set<number>>(
-    new Set(mockSongs.slice(0, 3).map(s => s.id))
-  )
+  const [likedSongs, setLikedSongs] = useState<Song[]>([])
+  const [downloads, setDownloads] = useState<Song[]>([])
+  const [history, setHistory] = useState<HistoryItem[]>([])
+  const [playlists, setPlaylists] = useState<Playlist[]>([])
+  const [sharedPlaylists, setSharedPlaylists] = useState<Playlist[]>([])
   const [showDownloadWarning, setShowDownloadWarning] = useState(true)
+  const [profileChip, setProfileChip] = useState<ProfileChip>({
+    name: authUser?.name || 'You',
+    userid: authUser?.userid || 'you',
+    avatarUrl: authUser?.avatarUrl || null,
+    rankBadge: authUser?.rankBadge || 0,
+  })
 
-  const regularPlaylists = mockPlaylists.filter(p => !p.isShared)
-  const sharedPlaylists = mockPlaylists.filter(p => p.isShared)
+  useEffect(() => {
+    const fetchLibrary = async () => {
+      try {
+        const [likedRes, downloadsRes, historyRes, playlistsRes, sharedRes, profileRes] = await Promise.all([
+          musicApi.getLiked(),
+          musicApi.getDownloads(),
+          musicApi.getHistory(),
+          musicApi.getPlaylists(),
+          musicApi.getSharedPlaylists(),
+          usersApi.getMyProfile(),
+        ])
 
-  const toggleLike = (songId: number) => {
-    setLikedSet(prev => {
-      const next = new Set(prev)
-      if (next.has(songId)) {
-        next.delete(songId)
-        setLikedSongs(s => s.filter(song => song.id !== songId))
-      } else {
-        next.add(songId)
-        const song = mockSongs.find(s => s.id === songId)
-        if (song) setLikedSongs(s => [...s, song])
+        setLikedSongs((likedRes.data.songs || []).map(mapSong))
+        setDownloads((downloadsRes.data.songs || []).map(mapSong))
+        setHistory((historyRes.data.history || []).map(mapHistoryItem))
+        setPlaylists((playlistsRes.data.playlists || []).map(mapPlaylist))
+        setSharedPlaylists((sharedRes.data.playlists || []).map(mapPlaylist))
+
+        const p = profileRes.data.user || {}
+        setProfileChip({
+          name: p.name || authUser?.name || 'You',
+          userid: p.userid || authUser?.userid || 'you',
+          avatarUrl: p.avatar_url || authUser?.avatarUrl || null,
+          rankBadge: p.rank_badge || authUser?.rankBadge || 0,
+        })
+      } catch {
+        setLikedSongs([])
+        setDownloads([])
+        setHistory([])
+        setPlaylists([])
+        setSharedPlaylists([])
       }
-      return next
-    })
+    }
+
+    fetchLibrary()
+  }, [authUser])
+
+  const likedSet = useMemo(() => new Set(likedSongs.map(s => s.id)), [likedSongs])
+
+  const toggleLike = async (songId: number) => {
+    const isLiked = likedSet.has(songId)
+    const targetSong = likedSongs.find(s => s.id === songId)
+
+    if (isLiked) {
+      setLikedSongs(prev => prev.filter(song => song.id !== songId))
+      try {
+        await musicApi.unlikeSong(songId)
+      } catch {
+        if (targetSong) setLikedSongs(prev => [...prev, targetSong])
+      }
+      return
+    }
+
+    if (!targetSong) return
+
+    setLikedSongs(prev => [...prev, targetSong])
+    try {
+      await musicApi.likeSong(songId)
+    } catch {
+      setLikedSongs(prev => prev.filter(song => song.id !== songId))
+    }
   }
 
-  const removeFromHistory = (id: number) => {
+  const removeFromHistory = async (id: number) => {
+    const previous = history
     setHistory(prev => prev.filter(h => h.id !== id))
+    try {
+      await musicApi.deleteHistoryItem(id)
+    } catch {
+      setHistory(previous)
+    }
   }
 
-  const clearHistory = () => setHistory([])
+  const clearHistory = async () => {
+    const previous = history
+    setHistory([])
+    try {
+      await musicApi.clearHistory()
+    } catch {
+      setHistory(previous)
+    }
+  }
 
   const shuffleAll = () => {
     const allSongs = [...likedSongs, ...downloads]
     if (allSongs.length === 0) return
     const randomIndex = Math.floor(Math.random() * allSongs.length)
+    const song = allSongs[randomIndex]
     play({
-      id: allSongs[randomIndex].id,
-      youtubeId: (allSongs[randomIndex] as any).youtube_id || allSongs[randomIndex].youtubeId || '',
-      title: allSongs[randomIndex].title,
-      artist: allSongs[randomIndex].artist,
-      thumbnailUrl: (allSongs[randomIndex] as any).thumbnail_url || allSongs[randomIndex].thumbnailUrl || '',
-      audioUrl: (allSongs[randomIndex] as any).s3_audio_url || allSongs[randomIndex].audioUrl || null,
-      duration: allSongs[randomIndex].duration,
+      id: song.id,
+      youtubeId: song.youtube_id || song.youtubeId || '',
+      title: song.title,
+      artist: song.artist,
+      thumbnailUrl: song.thumbnail_url || song.thumbnailUrl || '',
+      audioUrl: song.s3_audio_url || song.audioUrl || null,
+      duration: song.duration,
     })
   }
 
@@ -85,7 +185,7 @@ export default function MusicPage() {
     {
       icon: ListMusic,
       label: 'Playlists',
-      count: regularPlaylists.length,
+      count: playlists.length,
       color: 'var(--brand-primary)',
       section: 'playlists' as Section,
     },
@@ -98,7 +198,6 @@ export default function MusicPage() {
     },
   ]
 
-  // Sub-section header
   const SubHeader = ({ title }: { title: string }) => (
     <header style={{
       height: 'var(--header-h)',
@@ -121,7 +220,7 @@ export default function MusicPage() {
           padding: 4,
         }}
       >
-        ←
+        {'<-'}
       </button>
       <h2 style={{
         fontFamily: 'Syne, sans-serif',
@@ -134,7 +233,6 @@ export default function MusicPage() {
     </header>
   )
 
-  // Liked Songs section
   if (section === 'liked') {
     return (
       <div style={{
@@ -160,7 +258,7 @@ export default function MusicPage() {
                 key={song.id}
                 song={song}
                 isLiked={likedSet.has(song.id)}
-                onLike={() => toggleLike(song.id)}
+                onLike={() => void toggleLike(song.id)}
               />
             ))
           )}
@@ -169,7 +267,6 @@ export default function MusicPage() {
     )
   }
 
-  // Downloads section
   if (section === 'downloads') {
     return (
       <div style={{
@@ -189,7 +286,7 @@ export default function MusicPage() {
               border: '1px solid var(--accent)',
               borderRadius: 12,
             }}>
-              <span style={{ fontSize: 16, flexShrink: 0 }}>ℹ️</span>
+              <span style={{ fontSize: 16, flexShrink: 0 }}>i</span>
               <p style={{
                 fontSize: 13,
                 color: 'var(--text-secondary)',
@@ -224,7 +321,6 @@ export default function MusicPage() {
     )
   }
 
-  // Playlists section
   if (section === 'playlists') {
     return (
       <div style={{
@@ -249,7 +345,7 @@ export default function MusicPage() {
                 display: 'flex', padding: 4,
               }}
             >
-              ←
+              {'<-'}
             </button>
             <h2 style={{
               fontFamily: 'Syne, sans-serif',
@@ -259,29 +355,18 @@ export default function MusicPage() {
               My Playlists
             </h2>
           </div>
-          <button style={{
-            background: 'none', border: 'none',
-            cursor: 'pointer', color: 'var(--brand-primary)',
-            fontSize: 14, fontWeight: 600,
-            fontFamily: 'DM Sans, sans-serif',
-          }}>
-            + New
-          </button>
         </header>
         <div style={{ flex: 1, overflowY: 'auto' }}>
-          {regularPlaylists.length === 0 ? (
+          {playlists.length === 0 ? (
             <div style={{
               display: 'flex', flexDirection: 'column',
               alignItems: 'center', padding: '60px 24px', textAlign: 'center',
             }}>
               <Music size={48} style={{ color: 'var(--border-color)', marginBottom: 16 }} />
               <h3 style={{ marginBottom: 8 }}>No playlists yet</h3>
-              <button className="btn btn-primary" style={{ height: 40, fontSize: 14 }}>
-                Create Playlist
-              </button>
             </div>
           ) : (
-            regularPlaylists.map(p => (
+            playlists.map(p => (
               <PlaylistCard key={p.id} playlist={p} />
             ))
           )}
@@ -290,7 +375,6 @@ export default function MusicPage() {
     )
   }
 
-  // Shared Playlists section
   if (section === 'shared') {
     return (
       <div style={{
@@ -307,7 +391,6 @@ export default function MusicPage() {
     )
   }
 
-  // Main library screen
   return (
     <div style={{
       display: 'flex',
@@ -316,7 +399,6 @@ export default function MusicPage() {
       background: 'var(--bg-primary)',
       overflow: 'hidden',
     }}>
-      {/* Header */}
       <header style={{
         height: 'var(--header-h)',
         background: 'var(--bg-elevated)',
@@ -338,7 +420,6 @@ export default function MusicPage() {
       </header>
 
       <div style={{ flex: 1, overflowY: 'auto' }}>
-        {/* User chip */}
         <div style={{
           display: 'flex',
           alignItems: 'center',
@@ -347,11 +428,11 @@ export default function MusicPage() {
           borderBottom: '1px solid var(--border-subtle)',
         }}>
           <Avatar
-            name={mockCurrentUser.name}
-            src={mockCurrentUser.avatarUrl}
+            name={profileChip.name}
+            src={profileChip.avatarUrl}
             size={40}
             showRank={true}
-            rankNumber={mockCurrentUser.rankBadge}
+            rankNumber={profileChip.rankBadge}
           />
           <div>
             <div style={{
@@ -359,15 +440,14 @@ export default function MusicPage() {
               fontWeight: 600,
               color: 'var(--text-primary)',
             }}>
-              {mockCurrentUser.name}
+              {profileChip.name}
             </div>
             <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-              @{mockCurrentUser.username}
+              @{profileChip.userid}
             </div>
           </div>
         </div>
 
-        {/* Library options */}
         {libraryItems.map(({ icon: Icon, label, count, color, section: s }) => (
           <div
             key={label}
@@ -415,7 +495,6 @@ export default function MusicPage() {
           </div>
         ))}
 
-        {/* Shuffle All button */}
         <div style={{ padding: '20px 16px 8px' }}>
           <button
             onClick={shuffleAll}
@@ -430,7 +509,6 @@ export default function MusicPage() {
           </button>
         </div>
 
-        {/* History section */}
         <div style={{ padding: '16px 0' }}>
           <div style={{
             display: 'flex',
@@ -448,7 +526,7 @@ export default function MusicPage() {
             </h3>
             {history.length > 0 && (
               <button
-                onClick={clearHistory}
+                onClick={() => void clearHistory()}
                 style={{
                   background: 'none',
                   border: 'none',
@@ -493,15 +571,14 @@ export default function MusicPage() {
                 }
                 onClick={() => play({
                   id: item.song.id,
-                  youtubeId: (item.song as any).youtube_id || item.song.youtubeId || '',
+                  youtubeId: item.song.youtube_id || item.song.youtubeId || '',
                   title: item.song.title,
                   artist: item.song.artist,
-                  thumbnailUrl: (item.song as any).thumbnail_url || item.song.thumbnailUrl || '',
-                  audioUrl: (item.song as any).s3_audio_url || item.song.audioUrl || null,
+                  thumbnailUrl: item.song.thumbnail_url || item.song.thumbnailUrl || '',
+                  audioUrl: item.song.s3_audio_url || item.song.audioUrl || null,
                   duration: item.song.duration,
                 })}
               >
-                {/* Thumbnail */}
                 <div style={{
                   width: 48,
                   height: 48,
@@ -517,7 +594,6 @@ export default function MusicPage() {
                   />
                 </div>
 
-                {/* Info */}
                 <div style={{ flex: 1, overflow: 'hidden' }}>
                   <div style={{
                     fontSize: 14,
@@ -530,13 +606,15 @@ export default function MusicPage() {
                     {item.song.title}
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                    {item.song.artist} · {item.playedAt}
+                    {item.song.artist} {item.playedAt ? `· ${item.playedAt}` : ''}
                   </div>
                 </div>
 
-                {/* Remove */}
                 <button
-                  onClick={e => { e.stopPropagation(); removeFromHistory(item.id) }}
+                  onClick={e => {
+                    e.stopPropagation()
+                    void removeFromHistory(item.id)
+                  }}
                   style={{
                     background: 'none',
                     border: 'none',

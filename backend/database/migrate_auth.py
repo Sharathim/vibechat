@@ -67,7 +67,7 @@ def migrate():
         # Step 1: Backup existing data
         print("\n1. Backing up user data...")
         cursor.execute("""
-            SELECT id, gmail, username, name, password_hash, rank_badge,
+            SELECT id, gmail, userid, name, password_hash, rank_badge,
                    auth_provider, created_at, last_login, is_active,
                    login_attempts, locked_until
             FROM users
@@ -82,7 +82,7 @@ def migrate():
             CREATE TABLE users_new (
                 id              INTEGER PRIMARY KEY AUTOINCREMENT,
                 email           TEXT UNIQUE NOT NULL,
-                username        TEXT UNIQUE NOT NULL,
+                userid        TEXT UNIQUE NOT NULL,
                 name            TEXT NOT NULL,
                 password_hash   TEXT,
                 google_id       TEXT UNIQUE,
@@ -108,13 +108,13 @@ def migrate():
 
             cursor.execute("""
                 INSERT INTO users_new
-                (id, email, username, name, password_hash, google_id, rank_badge,
+                (id, email, userid, name, password_hash, google_id, rank_badge,
                  created_at, last_login, is_active, login_attempts, locked_until)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 user['id'],
                 user['gmail'],  # gmail -> email
-                user['username'],
+                user['userid'],
                 user['name'],
                 password,
                 google_id,
@@ -136,7 +136,7 @@ def migrate():
         # Step 5: Recreate indexes
         print("\n5. Creating indexes...")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_userid ON users(userid)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id)")
 
         # Step 6: Also migrate otp_verifications if needed

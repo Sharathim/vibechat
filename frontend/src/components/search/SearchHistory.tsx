@@ -13,7 +13,7 @@ interface SongHistoryItem {
 interface UserHistoryItem {
   id: number
   type: 'user'
-  user: Pick<User, 'id' | 'name' | 'username' | 'avatarUrl'>
+  user: Pick<User, 'id' | 'name' | 'userid' | 'avatarUrl'>
 }
 
 type HistoryItem = SongHistoryItem | UserHistoryItem
@@ -175,7 +175,7 @@ export default function SearchHistory({
                     fontSize: 12,
                     color: 'var(--text-secondary)',
                   }}>
-                    @{item.user.username}
+                    @{item.user.userid}
                   </div>
                 </div>
               </>

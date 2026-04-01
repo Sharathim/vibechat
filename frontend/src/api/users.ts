@@ -6,15 +6,15 @@ export const usersApi = {
 
   updateProfile: (data: {
     name?: string
-    username?: string
+    userid?: string
     bio?: string
   }) => client.put('/api/profile/me', data),
 
   uploadAvatar: (imageData: string) =>
     client.post('/api/profile/me/avatar', { image: imageData }),
 
-  getProfile: (username: string) =>
-    client.get(`/api/profile/${username}`),
+  getProfile: (userid: string) =>
+    client.get(`/api/profile/${userid}`),
 
   getFollowers: () =>
     client.get('/api/profile/me/followers'),

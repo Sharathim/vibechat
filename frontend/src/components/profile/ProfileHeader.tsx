@@ -44,7 +44,7 @@ export default function ProfileHeader({
           color: 'var(--text-secondary)',
           marginBottom: user.bio ? 8 : 0,
         }}>
-          @{user.username}
+          @{user.userid}
         </div>
         {user.bio && (
           <div style={{

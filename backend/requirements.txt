@@ -3,10 +3,13 @@ Flask==3.0.0
 flask-cors==4.0.0
 flask-socketio==5.3.6
 flask-bcrypt==1.0.1
-flask-mail==0.9.1
 eventlet==0.33.3
 
-# Firebase Admin SDK
+# JWT token verification (offline)
+PyJWT==2.8.0
+cryptography==42.0.5
+
+# Firebase Admin SDK (for other Firebase features, NOT token verification)
 firebase-admin==6.4.0
 
 # AWS S3
@@ -21,6 +24,9 @@ httpx==0.27.0
 
 # Production server
 gunicorn==21.2.0
+
+# PostgreSQL
+psycopg2-binary==2.9.9
 
 # Other utilities
 python-dotenv==1.0.0

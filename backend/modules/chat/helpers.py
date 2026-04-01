@@ -32,7 +32,7 @@ def get_conversations(user_id):
                WHEN c.user1_id = ? THEN c.user2_id
                ELSE c.user1_id
              END as other_user_id,
-             u.username, u.name,
+             u.userid, u.name,
              p.avatar_url,
              p.show_online_status,
              (SELECT content FROM messages
@@ -60,7 +60,7 @@ def get_conversations(user_id):
 def get_messages(conversation_id, limit=50, offset=0):
     rows = query_db(
         """SELECT m.*,
-                  u.username as sender_username,
+                  u.userid as sender_userid,
                   u.name as sender_name,
                   p.avatar_url as sender_avatar
            FROM messages m
@@ -91,7 +91,7 @@ def send_message(conversation_id, sender_id,
 
     msg = query_db(
         """SELECT m.*,
-                  u.username as sender_username,
+                  u.userid as sender_userid,
                   u.name as sender_name,
                   p.avatar_url as sender_avatar
            FROM messages m

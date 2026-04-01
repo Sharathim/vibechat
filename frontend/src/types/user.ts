@@ -1,6 +1,6 @@
 export interface User {
   id: number
-  username: string
+  userid: string
   name: string
   email: string
   avatarUrl: string | null
@@ -24,7 +24,7 @@ export interface Notification {
   fromUser: {
     id: number
     name: string
-    username: string
+    userid: string
     avatarUrl: string | null
   }
   message: string

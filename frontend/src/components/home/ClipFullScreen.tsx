@@ -166,7 +166,7 @@ export default function ClipFullScreen({
           gap: 10,
         }}>
           <Avatar
-            name={clip.username}
+            name={clip.userid}
             src={clip.avatarUrl}
             size={40}
           />
@@ -176,7 +176,7 @@ export default function ClipFullScreen({
               fontWeight: 600,
               color: 'white',
             }}>
-              @{clip.username}
+              @{clip.userid}
             </div>
             <div style={{
               fontSize: 12,

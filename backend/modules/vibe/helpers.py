@@ -32,7 +32,7 @@ def get_vibe_queue(session_id):
         """SELECT vq.*, s.title, s.artist,
                   s.thumbnail_url, s.duration,
                   s.youtube_id,
-                  u.username as added_by_username
+                  u.userid as added_by_userid
            FROM vibe_queue vq
            JOIN songs s ON vq.song_id = s.id
            JOIN users u ON vq.added_by = u.id

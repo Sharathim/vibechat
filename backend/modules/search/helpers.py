@@ -17,7 +17,7 @@ def get_search_history(user_id, search_type, limit=5):
     else:
         rows = query_db(
             """SELECT sh.id, sh.type, sh.searched_at,
-                      u.id as user_id, u.username,
+                      u.id as user_id, u.userid,
                       u.name, p.avatar_url, u.rank_badge
                FROM search_history sh
                JOIN users u ON sh.reference_id = u.id

@@ -1,17 +1,54 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Music } from 'lucide-react'
 import NotificationBell from '../components/common/NotificationBell'
 import ClipRow from '../components/home/ClipRow'
 import FeedItem from '../components/home/FeedItem'
-import { mockFeedItems } from '../data/mockData'
 import type { FeedItem as FeedItemType } from '../types/feed'
+import feedApi from '../api/feed'
+import musicApi from '../api/music'
+
+const mapFeedItem = (item: any): FeedItemType => ({
+  id: item.id,
+  song: {
+    id: item.song.id,
+    youtubeId: item.song.youtube_id,
+    youtube_id: item.song.youtube_id,
+    title: item.song.title,
+    artist: item.song.artist,
+    thumbnailUrl: item.song.thumbnail_url || '',
+    thumbnail_url: item.song.thumbnail_url || '',
+    audioUrl: item.song.s3_audio_url || null,
+    s3_audio_url: item.song.s3_audio_url || null,
+    duration: item.song.duration || 0,
+  },
+  likeCount: item.like_count || 0,
+  activityType: item.activity_type || 'like',
+  timestamp: item.timestamp || '',
+  isLiked: Boolean(item.is_liked),
+})
 
 export default function HomePage() {
   const navigate = useNavigate()
-  const [feedItems, setFeedItems] = useState<FeedItemType[]>(mockFeedItems)
+  const [feedItems, setFeedItems] = useState<FeedItemType[]>([])
 
-  const handleLike = (id: number) => {
+  useEffect(() => {
+    const fetchFeed = async () => {
+      try {
+        const res = await feedApi.getFeed(1)
+        setFeedItems((res.data.feed || []).map(mapFeedItem))
+      } catch {
+        setFeedItems([])
+      }
+    }
+
+    fetchFeed()
+  }, [])
+
+  const handleLike = async (id: number) => {
+    const target = feedItems.find(item => item.id === id)
+    if (!target) return
+
     setFeedItems(prev =>
       prev.map(item =>
         item.id === id
@@ -25,6 +62,26 @@ export default function HomePage() {
           : item
       )
     )
+
+    try {
+      if (target.isLiked) {
+        await musicApi.unlikeSong(target.song.id)
+      } else {
+        await musicApi.likeSong(target.song.id)
+      }
+    } catch {
+      setFeedItems(prev =>
+        prev.map(item =>
+          item.id === id
+            ? {
+                ...item,
+                isLiked: target.isLiked,
+                likeCount: target.likeCount,
+              }
+            : item
+        )
+      )
+    }
   }
 
   return (

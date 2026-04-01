@@ -2,30 +2,78 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { Edit, Search, X, MessageCircle } from 'lucide-react'
 import ConversationItem from '../components/chat/ConversationItem'
-import { mockConversations, mockUsers } from '../data/mockData'
 import type { Conversation } from '../types/chat'
 import { Outlet } from 'react-router-dom'
 import chatApi from '../api/chat'
+import searchApi from '../api/search'
+import { timeAgo } from '../lib/utils'
+
+type ChatSearchUser = {
+  id: number
+  name: string
+  userid: string
+  avatarUrl: string | null
+}
+
+const mapConversation = (row: any): Conversation => ({
+  id: row.id,
+  user: {
+    id: row.other_user_id,
+    name: row.name || 'Unknown',
+    userid: row.userid || 'unknown',
+    avatarUrl: row.avatar_url || null,
+  },
+  lastMessage: row.last_message || 'Say hi',
+  lastMessageType: row.last_message_type || 'text',
+  lastMessageAt: row.last_message_at ? timeAgo(row.last_message_at) : '',
+  unreadCount: row.unread_count || 0,
+  isOnline: Boolean(row.show_online_status),
+})
 
 export default function ChatPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const [conversations, setConversations] = useState<Conversation[]>([])
+  const [searchUsers, setSearchUsers] = useState<ChatSearchUser[]>([])
   const [searchQuery, setSearchQuery] = useState('')
 
   useEffect(() => {
     const fetchConversations = async () => {
       try {
         const res = await chatApi.getConversations()
-        setConversations(res.data.conversations || [])
+        setConversations((res.data.conversations || []).map(mapConversation))
       } catch (err) {
         console.error('Failed to load conversations:', err)
-        // Fall back to mock data in development
-        setConversations(mockConversations)
+        setConversations([])
       }
     }
     fetchConversations()
   }, [])
+
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchUsers([])
+      return
+    }
+
+    const loadUsers = async () => {
+      try {
+        const res = await searchApi.searchUsers(searchQuery)
+        setSearchUsers(
+          (res.data.users || []).map((u: any) => ({
+            id: u.id,
+            name: u.name || 'Unknown',
+            userid: u.userid || 'unknown',
+            avatarUrl: u.avatar_url || null,
+          }))
+        )
+      } catch {
+        setSearchUsers([])
+      }
+    }
+
+    loadUsers()
+  }, [searchQuery])
 
   const isConversationOpen = location.pathname !== '/chat'
 
@@ -33,17 +81,17 @@ export default function ChatPage() {
     const q = searchQuery.toLowerCase()
     return (
       c.user.name.toLowerCase().includes(q) ||
-      c.user.username.toLowerCase().includes(q)
+      c.user.userid.toLowerCase().includes(q)
     )
   })
 
   // Non-chatted followers for search
   const chattedIds = new Set(conversations.map(c => c.user.id))
-  const nonChatted = mockUsers
+  const nonChatted = searchUsers
     .filter(u => !chattedIds.has(u.id))
     .filter(u =>
       u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.username.toLowerCase().includes(searchQuery.toLowerCase())
+      u.userid.toLowerCase().includes(searchQuery.toLowerCase())
     )
 
   return (
@@ -151,7 +199,7 @@ function ChatList({
   navigate,
 }: {
   filtered: Conversation[]
-  nonChatted: typeof mockUsers
+  nonChatted: ChatSearchUser[]
   searchQuery: string
   setSearchQuery: (q: string) => void
   navigate: (path: string) => void
@@ -266,7 +314,14 @@ function ChatList({
             {nonChatted.map(user => (
               <div
                 key={user.id}
-                onClick={() => navigate(`/chat/new-${user.id}`)}
+                onClick={async () => {
+                  try {
+                    const res = await chatApi.getOrCreateConversation(user.id)
+                    navigate(`/chat/${res.data.conversation.id}`)
+                  } catch {
+                    navigate('/chat')
+                  }
+                }}
                 style={{
                   display: 'flex',
                   alignItems: 'center',

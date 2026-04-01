@@ -1,6 +1,6 @@
 import { Plus, X, GripVertical } from 'lucide-react'
 import type { VibeQueueItem } from '../../types/vibe'
-import { formatDuration } from '../../data/mockData'
+import { formatDuration } from '../../lib/utils'
 
 interface VibeQueueProps {
   queue: VibeQueueItem[]

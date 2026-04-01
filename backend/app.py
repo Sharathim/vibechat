@@ -1,23 +1,29 @@
+import os
+
+# Eventlet's green DNS resolver can intermittently fail in containers.
+# Use system DNS resolution for outbound HTTPS requests.
+os.environ.setdefault('EVENTLET_NO_GREENDNS', 'yes')
+
 import eventlet
 eventlet.monkey_patch()
 
 from flask import Flask
 from flask_cors import CORS
 from config import Config
-from extensions import socketio, bcrypt, mail
+from extensions import socketio, bcrypt
 from database.db import init_db
+from database.pg_db import init_pg_db
+from firebase_config import load_all_certs
 
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
 
-    # Additional Flask-Mail config
-    app.config['MAIL_SERVER'] = 'smtp.gmail.com'
-    app.config['MAIL_PORT'] = 587
-    app.config['MAIL_USE_TLS'] = True
-    app.config['MAIL_USERNAME'] = Config.MAIL_EMAIL
-    app.config['MAIL_PASSWORD'] = Config.MAIL_PASSWORD
-    app.config['MAIL_DEFAULT_SENDER'] = Config.MAIL_EMAIL
+    @app.after_request
+    def apply_security_headers(response):
+        response.headers['Cross-Origin-Opener-Policy'] = 'same-origin-allow-popups'
+        response.headers['Cross-Origin-Embedder-Policy'] = 'unsafe-none'
+        return response
 
     # CORS
     CORS(app,
@@ -26,7 +32,6 @@ def create_app():
 
     # Extensions
     bcrypt.init_app(app)
-    mail.init_app(app)
     socketio.init_app(app,
                       cors_allowed_origins=Config.FRONTEND_URLS)
 
@@ -68,11 +73,17 @@ def create_app():
     def health():
         return {'status': 'ok', 'message': 'VibeChat API running'}
 
+    # Initialize databases
+    init_db()
+    init_pg_db()
+
+    # Pre-load Firebase/Google public keys for offline token verification
+    load_all_certs()
+
     return app
 
 if __name__ == '__main__':
     app = create_app()
-    init_db()
     print("🎵 VibeChat backend starting...")
     socketio.run(app,
                  host=app.config['HOST'],

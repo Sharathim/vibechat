@@ -1,14 +1,51 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Plus } from 'lucide-react'
-import { mockClips, mockCurrentUser } from '../../data/mockData'
 import type { SongClip } from '../../types/feed'
 import ClipFullScreen from './ClipFullScreen'
 import Avatar from '../common/Avatar'
+import feedApi from '../../api/feed'
+import { useAuth } from '../../context/AuthContext'
+
+const mapClip = (clip: any): SongClip => ({
+  id: clip.id,
+  userId: clip.user_id,
+  userid: clip.userid || 'unknown',
+  avatarUrl: clip.avatar_url || null,
+  song: {
+    id: clip.song_id,
+    youtubeId: clip.youtube_id,
+    youtube_id: clip.youtube_id,
+    title: clip.title,
+    artist: clip.artist,
+    thumbnailUrl: clip.thumbnail_url || '',
+    thumbnail_url: clip.thumbnail_url || '',
+    audioUrl: null,
+    s3_audio_url: null,
+    duration: clip.duration || 0,
+  },
+  startSeconds: clip.start_seconds || 0,
+  expiresAt: clip.expires_at,
+  isViewed: Boolean(clip.is_viewed),
+})
 
 export default function ClipRow() {
-  const [clips, setClips] = useState<SongClip[]>(mockClips)
+  const { user } = useAuth()
+  const [clips, setClips] = useState<SongClip[]>([])
   const [activeClip, setActiveClip] = useState<SongClip | null>(null)
   const [activeIndex, setActiveIndex] = useState(0)
+
+  useEffect(() => {
+    const fetchClips = async () => {
+      try {
+        const res = await feedApi.getClips()
+        setClips((res.data.clips || []).map(mapClip))
+      } catch {
+        setClips([])
+      }
+    }
+
+    fetchClips()
+  }, [])
 
   const openClip = (clip: SongClip, index: number) => {
     setActiveClip(clip)
@@ -16,6 +53,7 @@ export default function ClipRow() {
     setClips(prev =>
       prev.map(c => c.id === clip.id ? { ...c, isViewed: true } : c)
     )
+    void feedApi.viewClip(clip.id)
   }
 
   const closeClip = () => setActiveClip(null)
@@ -73,8 +111,8 @@ export default function ClipRow() {
               padding: 3,
             }}>
               <Avatar
-                name={mockCurrentUser.name}
-                src={mockCurrentUser.avatarUrl}
+                name={user?.name || 'You'}
+                src={user?.avatarUrl || null}
                 size={60}
               />
             </div>
@@ -150,7 +188,7 @@ export default function ClipRow() {
                   padding: 2,
                 }}>
                   <Avatar
-                    name={clip.username}
+                    name={clip.userid}
                     src={clip.avatarUrl}
                     size={54}
                   />
@@ -169,7 +207,7 @@ export default function ClipRow() {
                 whiteSpace: 'nowrap',
                 fontWeight: isViewed ? 400 : 500,
               }}>
-                {clip.username}
+                {clip.userid}
               </span>
             </div>
           )

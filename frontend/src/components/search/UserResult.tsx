@@ -54,7 +54,7 @@ export default function UserResult({
       onMouseLeave={e =>
         e.currentTarget.style.background = 'transparent'
       }
-      onClick={() => navigate(`/profile/${user.username}`)}
+      onClick={() => navigate(`/profile/${user.userid}`)}
     >
       {/* Avatar with rank badge */}
       <Avatar
@@ -79,7 +79,7 @@ export default function UserResult({
           fontSize: 12,
           color: 'var(--text-secondary)',
         }}>
-          @{user.username}
+          @{user.userid}
         </div>
       </div>
 

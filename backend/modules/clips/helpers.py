@@ -7,7 +7,7 @@ def get_active_clips(user_id):
                   s.title, s.artist,
                   s.thumbnail_url, s.youtube_id,
                   s.duration,
-                  u.username, u.name,
+                  u.userid, u.name,
                   p.avatar_url,
                   CASE WHEN cv.id IS NOT NULL
                        THEN 1 ELSE 0 END as is_viewed

@@ -12,7 +12,7 @@ export interface FeedItem {
 export interface SongClip {
   id: number
   userId: number
-  username: string
+  userid: string
   avatarUrl: string | null
   song: Song
   startSeconds: number

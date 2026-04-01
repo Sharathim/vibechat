@@ -5,7 +5,7 @@ export interface VibeRequest {
   fromUser: {
     id: number
     name: string
-    username: string
+    userid: string
     avatarUrl: string | null
   }
   isCoHost: boolean
@@ -20,7 +20,7 @@ export interface VibeQueueItem extends Song {
 export interface VibeSessionData {
   id: string
   partnerName: string
-  partnerUsername: string
+  partnerUserid: string
   partnerAvatar: string | null
   isCoHost: boolean
   isHost: boolean

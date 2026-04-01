@@ -1,8 +1,8 @@
 from database.db import execute_db, query_db, row_to_dict, rows_to_list
 
-def get_user_profile(username, current_user_id=None):
+def get_user_profile(userid, current_user_id=None):
     user = query_db(
-        """SELECT u.id, u.username, u.name,
+        """SELECT u.id, u.userid, u.name,
                   u.rank_badge, u.created_at,
                   p.bio, p.avatar_url, p.is_private,
                   p.show_rank_badge, p.show_online_status,
@@ -23,9 +23,9 @@ def get_user_profile(username, current_user_id=None):
                vs.host_user_id = u.id
                AND vs.status = 'ended'
            )
-           WHERE u.username = ? AND u.is_active = 1
+           WHERE u.userid = ? AND u.is_active = 1
            GROUP BY u.id""",
-        (username,), one=True
+        (userid,), one=True
     )
 
     if not user:
@@ -47,7 +47,7 @@ def get_user_profile(username, current_user_id=None):
 
         # Mutual followers
         mutuals = query_db(
-            """SELECT u.id, u.name, u.username, p.avatar_url
+            """SELECT u.id, u.name, u.userid, p.avatar_url
                FROM follows f1
                JOIN follows f2 ON f1.follower_id = f2.follower_id
                JOIN users u ON f1.follower_id = u.id
@@ -66,7 +66,7 @@ def get_user_profile(username, current_user_id=None):
 
 def get_followers(user_id, limit=50, offset=0):
     rows = query_db(
-        """SELECT u.id, u.username, u.name,
+        """SELECT u.id, u.userid, u.name,
                   u.rank_badge, p.avatar_url
            FROM follows f
            JOIN users u ON f.follower_id = u.id
@@ -82,7 +82,7 @@ def get_followers(user_id, limit=50, offset=0):
 
 def get_following(user_id, limit=50, offset=0):
     rows = query_db(
-        """SELECT u.id, u.username, u.name,
+        """SELECT u.id, u.userid, u.name,
                   u.rank_badge, p.avatar_url
            FROM follows f
            JOIN users u ON f.following_id = u.id
@@ -100,7 +100,7 @@ def get_follow_requests(user_id):
     rows = query_db(
         """SELECT f.id, f.created_at,
                   u.id as from_user_id,
-                  u.username, u.name,
+                  u.userid, u.name,
                   u.rank_badge, p.avatar_url
            FROM follows f
            JOIN users u ON f.follower_id = u.id

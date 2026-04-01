@@ -23,7 +23,7 @@ export interface Message {
 
 export interface Conversation {
   id: number
-  user: Pick<User, 'id' | 'name' | 'username' | 'avatarUrl'>
+  user: Pick<User, 'id' | 'name' | 'userid' | 'avatarUrl'>
   lastMessage: string
   lastMessageType: 'text' | 'song' | 'vibe_recap'
   lastMessageAt: string

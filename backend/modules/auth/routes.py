@@ -1,80 +1,114 @@
+"""
+Auth routes — Google OAuth-only authentication.
+
+Endpoints:
+  POST /auth/google          — Verify Firebase/Google ID token, check if user exists
+  POST /auth/check-username  — Check username availability + suggestions
+  POST /auth/create-user     — Complete profile and create account
+  GET  /auth/me              — Get current session user
+  POST /auth/logout          — Clear session
+"""
+
 from flask import Blueprint, request, jsonify, session
 from .helpers import (
-    generate_otp, send_otp_email, save_otp, verify_otp,
-    is_username_taken, generate_username_suggestions,
-    hash_password, check_password, assign_rank_badge,
-    get_current_user, get_user_profile, get_or_create_google_user,
-    set_password_for_google_user
+    find_user_by_google_id_or_email,
+    is_username_taken,
+    generate_username_suggestions,
+    hash_password,
+    create_user,
+    get_current_user,
+    format_user_response,
 )
 from .validators import (
-    validate_gmail, validate_username,
-    validate_name, validate_password
+    validate_username,
+    validate_name,
+    validate_password,
 )
-from database.db import execute_db, query_db, row_to_dict
-from firebase_config import verify_firebase_token
+from firebase_config import verify_google_login_token, get_token_debug_info
 
 auth_bp = Blueprint('auth', __name__)
 
 
-# ── CHECK EMAIL ───────────────────────────────────
-@auth_bp.route('/check-email', methods=['POST'])
-def check_email():
-    data = request.get_json()
-    email = (data.get('email') or data.get('gmail') or '').strip().lower()
+# ── GOOGLE AUTH ──────────────────────────────────
+@auth_bp.route('/google', methods=['POST'])
+def google_auth():
+    """
+    Receive a Firebase/Google ID token from the frontend.
+    Verify it, extract google_id + email, check if user exists.
 
-    valid, msg = validate_gmail(email)
-    if not valid:
-        return jsonify({'error': msg}), 400
+    Returns:
+      - exists=True + user data → frontend redirects to home
+      - exists=False + googleId + email → frontend redirects to complete-profile
+    """
+    data = request.get_json(silent=True) or {}
+    id_token = (data.get('idToken') or data.get('token') or '').strip()
 
-    existing = query_db(
-        "SELECT id FROM users WHERE email = ?",
-        (email,), one=True
-    )
-    return jsonify({'exists': existing is not None})
+    if not id_token:
+        return jsonify({'error': 'ID token is required'}), 400
 
+    if len(id_token.split('.')) != 3:
+        return jsonify({'error': 'Malformed token. Expected JWT with 3 segments.'}), 400
 
-# ── SEND OTP ──────────────────────────────────────
-@auth_bp.route('/send-otp', methods=['POST'])
-def send_otp():
-    data = request.get_json()
-    email = (data.get('email') or data.get('gmail') or '').strip().lower()
-    purpose = data.get('purpose', 'registration')
+    try:
+        decoded_token, token_type = verify_google_login_token(id_token)
 
-    valid, msg = validate_gmail(email)
-    if not valid:
-        return jsonify({'error': msg}), 400
+        email = decoded_token.get('email')
+        google_id = decoded_token.get('uid') or decoded_token.get('sub')
 
-    otp = generate_otp()
-    save_otp(email, otp, purpose)
+        if not email:
+            return jsonify({'error': 'Email not found in Google account.'}), 400
+        if not google_id:
+            return jsonify({'error': 'Google account ID not found in token.'}), 400
 
-    # Try to send email — fall back to console in dev
-    sent = send_otp_email(email, otp, purpose)
-    if not sent:
-        print(f"[DEV] OTP for {email}: {otp}")
+        # Check if user already exists in PostgreSQL auth DB
+        existing_user = find_user_by_google_id_or_email(google_id, email)
 
-    return jsonify({'success': True, 'message': 'OTP sent'})
+        if existing_user:
+            # Existing user → set session and return user data
+            session['user_id'] = existing_user['id']
+            session.permanent = True
 
+            return jsonify({
+                'success': True,
+                'exists': True,
+                'user': format_user_response(existing_user),
+                'tokenType': token_type,
+            })
+        else:
+            # New user → return google_id and email for profile completion
+            return jsonify({
+                'success': True,
+                'exists': False,
+                'googleId': google_id,
+                'email': email,
+                'tokenType': token_type,
+            })
 
-# ── VERIFY OTP ────────────────────────────────────
-@auth_bp.route('/verify-otp', methods=['POST'])
-def verify_otp_route():
-    data = request.get_json()
-    email = (data.get('email') or data.get('gmail') or '').strip().lower()
-    otp = (data.get('otp') or '').strip()
-    purpose = data.get('purpose', 'registration')
-
-    success, message = verify_otp(email, otp, purpose)
-    if not success:
-        return jsonify({'error': message}), 400
-
-    return jsonify({'success': True, 'verified': True})
+    except ValueError as e:
+        token_debug = get_token_debug_info(id_token)
+        print('Google auth token verification failed:', {
+            'error': str(e),
+            'iss': token_debug.get('iss'),
+            'aud': token_debug.get('aud'),
+        })
+        return jsonify({
+            'error': f'Invalid token: {str(e)}',
+            'debug': {
+                'issuer': token_debug.get('iss'),
+                'audience': token_debug.get('aud'),
+            }
+        }), 401
+    except Exception as e:
+        print(f"Google auth error: {e}")
+        return jsonify({'error': 'Authentication failed. Please try again.'}), 500
 
 
 # ── CHECK USERNAME ────────────────────────────────
 @auth_bp.route('/check-username', methods=['POST'])
 def check_username():
+    """Check if a username is available. Returns suggestions if taken."""
     data = request.get_json()
-    username = (data.get('username') or '').strip()
+    username = (data.get('username') or '').strip().lower()
 
     valid, msg = validate_username(username)
     if not valid:
@@ -85,300 +119,84 @@ def check_username():
 
     return jsonify({
         'available': not taken,
-        'suggestions': suggestions
+        'suggestions': suggestions,
     })
 
 
-# ── REGISTER ──────────────────────────────────────
-@auth_bp.route('/register', methods=['POST'])
-def register():
-    data = request.get_json()
-    email = (data.get('email') or data.get('gmail') or '').strip().lower()
-    username = (data.get('username') or '').strip()
-    name = (data.get('name') or '').strip()
-    password = data.get('password') or ''
+# ── CREATE USER (Complete Profile) ────────────────
+@auth_bp.route('/create-user', methods=['POST'])
+def create_user_route():
+    """
+    Complete profile and create account after Google OAuth.
 
-    # Validate all fields
+    Expects: googleId, email, name, username, password, confirmPassword
+    """
+    data = request.get_json()
+
+    google_id = (data.get('googleId') or '').strip()
+    email = (data.get('email') or '').strip().lower()
+    name = (data.get('name') or '').strip()
+    username = (data.get('username') or '').strip().lower()
+    password = data.get('password') or ''
+    confirm_password = data.get('confirmPassword') or ''
+
+    # Validate required Google OAuth fields
+    if not google_id:
+        return jsonify({'error': 'Google ID is required'}), 400
+    if not email:
+        return jsonify({'error': 'Email is required'}), 400
+
+    # Validate form fields
     for validator, value in [
-        (validate_gmail, email),
-        (validate_username, username),
         (validate_name, name),
+        (validate_username, username),
         (validate_password, password),
     ]:
         valid, msg = validator(value)
         if not valid:
             return jsonify({'error': msg}), 400
 
-    # Check duplicates
-    if query_db("SELECT id FROM users WHERE email = ?", (email,), one=True):
-        return jsonify({'error': 'An account with this email already exists'}), 400
+    # Check passwords match
+    if password != confirm_password:
+        return jsonify({'error': 'Passwords do not match'}), 400
 
+    # Check if user already exists
+    existing = find_user_by_google_id_or_email(google_id, email)
+    if existing:
+        return jsonify({'error': 'An account with this Google account already exists'}), 400
+
+    # Check username availability
     if is_username_taken(username):
-        return jsonify({'error': 'Username already taken'}), 400
+        suggestions = generate_username_suggestions(username)
+        return jsonify({
+            'error': 'Username already taken',
+            'suggestions': suggestions,
+        }), 400
 
     # Create user
-    password_hash = hash_password(password)
-    rank_badge = assign_rank_badge()
-
-    user_id = execute_db(
-        """INSERT INTO users (email, username, name, password_hash, rank_badge)
-           VALUES (?, ?, ?, ?, ?)""",
-        (email, username.lower(), name, password_hash, rank_badge)
-    )
-
-    # Create profile
-    execute_db(
-        "INSERT INTO profiles (user_id) VALUES (?)",
-        (user_id,)
-    )
-
-    # Create settings
-    execute_db(
-        "INSERT INTO user_settings (user_id) VALUES (?)",
-        (user_id,)
-    )
-
-    return jsonify({
-        'success': True,
-        'message': 'Account created successfully'
-    }), 201
-
-
-# ── LOGIN ─────────────────────────────────────────
-@auth_bp.route('/login', methods=['POST'])
-def login():
-    data = request.get_json()
-    identifier = (data.get('identifier') or '').strip()
-    password = data.get('password') or ''
-
-    if not identifier or not password:
-        return jsonify({'error': 'Please enter your credentials'}), 400
-
-    # Find user by email or username
-    if '@' in identifier:
-        user = query_db(
-            "SELECT * FROM users WHERE email = ?",
-            (identifier.lower(),), one=True
-        )
-    else:
-        user = query_db(
-            "SELECT * FROM users WHERE LOWER(username) = LOWER(?)",
-            (identifier,), one=True
-        )
-
-    if not user:
-        return jsonify({'error': 'No account found with these credentials'}), 401
-
-    user = row_to_dict(user)
-
-    # Check if user has a password set
-    if not user['password_hash']:
-        return jsonify({
-            'error': 'This account uses Google Sign-In. Please sign in with Google or set a password.'
-        }), 401
-
-    # Check if account is locked
-    if user.get('locked_until'):
-        from datetime import datetime
-        locked_until = datetime.fromisoformat(user['locked_until'])
-        if datetime.utcnow() < locked_until:
-            return jsonify({
-                'error': 'Account temporarily locked. Try again in 15 minutes'
-            }), 423
-
-    # Check password
-    if not check_password(user['password_hash'], password):
-        attempts = user['login_attempts'] + 1
-        if attempts >= 5:
-            from datetime import datetime, timedelta
-            locked_until = (datetime.utcnow() + timedelta(minutes=15)).isoformat()
-            execute_db(
-                "UPDATE users SET login_attempts = ?, locked_until = ? WHERE id = ?",
-                (attempts, locked_until, user['id'])
-            )
-            return jsonify({
-                'error': 'Account temporarily locked. Try again in 15 minutes'
-            }), 423
-        else:
-            execute_db(
-                "UPDATE users SET login_attempts = ? WHERE id = ?",
-                (attempts, user['id'])
-            )
-            remaining = 5 - attempts
-            return jsonify({
-                'error': f'Incorrect password. {remaining} attempts remaining'
-            }), 401
-
-    # Reset login attempts
-    from datetime import datetime
-    execute_db(
-        """UPDATE users SET login_attempts = 0,
-           locked_until = NULL, last_login = ?
-           WHERE id = ?""",
-        (datetime.utcnow().isoformat(), user['id'])
-    )
-
-    # Get full profile
-    profile = get_user_profile(user['id'])
-
-    # Set session
-    session['user_id'] = user['id']
-    session.permanent = True
-
-    return jsonify({
-        'success': True,
-        'user': profile
-    })
-
-
-# ── GOOGLE AUTH ──────────────────────────────────
-@auth_bp.route('/google', methods=['POST'])
-def google_auth():
-    data = request.get_json()
-    id_token = data.get('idToken')
-
-    if not id_token:
-        return jsonify({'error': 'ID token is required'}), 400
-
     try:
-        # Verify the Firebase ID token
-        decoded_token = verify_firebase_token(id_token)
-
-        # Extract user info from token
-        email = decoded_token.get('email')
-        google_id = decoded_token.get('uid')  # Firebase UID
-        name = decoded_token.get('name', '')
-        picture = decoded_token.get('picture')
-
-        # Validate required fields
-        if not email:
-            return jsonify({'error': 'Email not found in Google account. Please use an account with email access.'}), 400
-
-        if not google_id:
-            return jsonify({'error': 'Google account ID not found in token'}), 400
-
-        # Get or create user with proper account linking
-        user, is_new, error = get_or_create_google_user(email, google_id, name, picture)
-
-        if error:
-            return jsonify({'error': error}), 400
+        password_hash = hash_password(password)
+        user_id = create_user(google_id, email, name, username, password_hash)
 
         # Set session
-        session['user_id'] = user['id']
+        session['user_id'] = user_id
         session.permanent = True
 
         return jsonify({
             'success': True,
-            'user': user,
-            'isNewUser': is_new
-        })
+            'message': 'Account created successfully',
+            'user': {
+                'id': user_id,
+                'google_id': google_id,
+                'email': email,
+                'name': name,
+                'username': username,
+            },
+        }), 201
 
-    except ValueError as e:
-        return jsonify({'error': f'Invalid token: {str(e)}'}), 401
     except Exception as e:
-        print(f"Google auth error: {e}")
-        return jsonify({'error': 'Authentication failed. Please try again.'}), 500
-
-
-# ── SET PASSWORD (for Google users) ───────────────
-@auth_bp.route('/set-password', methods=['POST'])
-def set_password():
-    """Allow Google-only users to set a password for email login."""
-    user = get_current_user(session)
-    if not user:
-        return jsonify({'error': 'Not authenticated'}), 401
-
-    data = request.get_json()
-    password = data.get('password') or ''
-
-    valid, msg = validate_password(password)
-    if not valid:
-        return jsonify({'error': msg}), 400
-
-    success, error = set_password_for_google_user(user['id'], password)
-
-    if not success:
-        return jsonify({'error': error}), 400
-
-    return jsonify({
-        'success': True,
-        'message': 'Password set successfully. You can now login with email and password.'
-    })
-
-
-# ── LOGOUT ────────────────────────────────────────
-@auth_bp.route('/logout', methods=['POST'])
-def logout():
-    session.clear()
-    return jsonify({'success': True})
-
-
-# ── FORGOT PASSWORD ───────────────────────────────
-@auth_bp.route('/forgot-password', methods=['POST'])
-def forgot_password():
-    data = request.get_json()
-    email = (data.get('email') or data.get('gmail') or '').strip().lower()
-
-    # Always return success (don't reveal if email exists)
-    user = query_db(
-        "SELECT id FROM users WHERE email = ?",
-        (email,), one=True
-    )
-
-    if user:
-        otp = generate_otp()
-        save_otp(email, otp, 'password_reset')
-        sent = send_otp_email(email, otp, 'password_reset')
-        if not sent:
-            print(f"[DEV] Password reset OTP for {email}: {otp}")
-
-    return jsonify({
-        'success': True,
-        'message': 'If an account exists with this email, an OTP has been sent'
-    })
-
-
-# ── RESET PASSWORD ────────────────────────────────
-@auth_bp.route('/reset-password', methods=['POST'])
-def reset_password():
-    data = request.get_json()
-    email = (data.get('email') or data.get('gmail') or '').strip().lower()
-    new_password = data.get('password') or ''
-
-    valid, msg = validate_password(new_password)
-    if not valid:
-        return jsonify({'error': msg}), 400
-
-    user = query_db(
-        "SELECT * FROM users WHERE email = ?",
-        (email,), one=True
-    )
-
-    if not user:
-        return jsonify({'error': 'Account not found'}), 404
-
-    user = row_to_dict(user)
-
-    # Make sure new password is different (only if they have one)
-    if user['password_hash'] and check_password(user['password_hash'], new_password):
-        return jsonify({
-            'error': 'New password cannot be the same as your current password'
-        }), 400
-
-    # Update password
-    password_hash = hash_password(new_password)
-    execute_db(
-        "UPDATE users SET password_hash = ? WHERE email = ?",
-        (password_hash, email)
-    )
-
-    # Clear all sessions
-    session.clear()
-
-    return jsonify({
-        'success': True,
-        'message': 'Password reset successfully'
-    })
+        print(f"Create user error: {e}")
+        return jsonify({'error': 'Failed to create account. Please try again.'}), 500
 
 
 # ── ME (get current user) ─────────────────────────
@@ -387,4 +205,11 @@ def me():
     user = get_current_user(session)
     if not user:
         return jsonify({'error': 'Not authenticated'}), 401
-    return jsonify({'user': user})
+    return jsonify({'user': format_user_response(user)})
+
+
+# ── LOGOUT ────────────────────────────────────────
+@auth_bp.route('/logout', methods=['POST'])
+def logout():
+    session.clear()
+    return jsonify({'success': True})

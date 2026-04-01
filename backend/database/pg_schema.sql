@@ -1,0 +1,17 @@
+-- VibeChat Auth Database (PostgreSQL)
+-- This is a separate auth-only database for Google OAuth users
+
+CREATE TABLE IF NOT EXISTS users (
+    id          SERIAL PRIMARY KEY,
+    google_id   VARCHAR(255) UNIQUE NOT NULL,
+    email       VARCHAR(255) UNIQUE NOT NULL,
+    name        VARCHAR(100) NOT NULL,
+    username    VARCHAR(20) UNIQUE NOT NULL,
+    password    VARCHAR(255) NOT NULL,
+    created_at  TIMESTAMP DEFAULT NOW()
+);
+
+-- Indexes for fast lookups
+CREATE INDEX IF NOT EXISTS idx_auth_users_google_id ON users(google_id);
+CREATE INDEX IF NOT EXISTS idx_auth_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_auth_users_username ON users(username);

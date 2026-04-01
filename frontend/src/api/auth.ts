@@ -1,43 +1,31 @@
 import client from './client'
 
 export const authApi = {
-  checkEmail: (gmail: string) =>
-    client.post('/auth/check-email', { gmail }),
+  // Verify Google ID token and check if user exists
+  googleAuth: (idToken: string) =>
+    client.post('/auth/google', { idToken, token: idToken }),
 
-  sendOTP: (gmail: string, purpose: string) =>
-    client.post('/auth/send-otp', { gmail, purpose }),
-
-  verifyOTP: (gmail: string, otp: string, purpose: string) =>
-    client.post('/auth/verify-otp', { gmail, otp, purpose }),
-
+  // Check username availability
   checkUsername: (username: string) =>
     client.post('/auth/check-username', { username }),
 
-  register: (data: {
-    gmail: string
-    username: string
+  // Create user account (complete profile)
+  createUser: (data: {
+    googleId: string
+    email: string
     name: string
+    username: string
     password: string
-  }) => client.post('/auth/register', data),
+    confirmPassword: string
+  }) => client.post('/auth/create-user', data),
 
-  login: (identifier: string, password: string) =>
-    client.post('/auth/login', { identifier, password }),
-
-  logout: () =>
-    client.post('/auth/logout'),
-
-  forgotPassword: (gmail: string) =>
-    client.post('/auth/forgot-password', { gmail }),
-
-  resetPassword: (gmail: string, password: string) =>
-    client.post('/auth/reset-password', { gmail, password }),
-
+  // Get current session user
   me: () =>
     client.get('/auth/me'),
 
-  // Google OAuth login - send Firebase ID token to backend for verification
-  googleLogin: (idToken: string) =>
-    client.post('/auth/google', { idToken }),
+  // Logout
+  logout: () =>
+    client.post('/auth/logout'),
 }
 
 export default authApi

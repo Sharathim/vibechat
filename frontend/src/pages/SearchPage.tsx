@@ -3,12 +3,39 @@ import SearchBar from '../components/search/SearchBar'
 import SearchHistory from '../components/search/SearchHistory'
 import SongResult from '../components/search/SongResult'
 import UserResult from '../components/search/UserResult'
-import { mockSongs, mockUsers } from '../data/mockData'
 import type { Song } from '../types/song'
 import type { User } from '../types/user'
 import { useDebounce } from '../hooks/useDebounce'
 import { useMusic } from '../context/MusicContext'
 import searchApi from '../api/search'
+import usersApi from '../api/users'
+
+const mapSong = (song: any): Song => ({
+  id: song.id,
+  youtubeId: song.youtube_id,
+  youtube_id: song.youtube_id,
+  title: song.title,
+  artist: song.artist,
+  thumbnailUrl: song.thumbnail_url || '',
+  thumbnail_url: song.thumbnail_url || '',
+  audioUrl: song.s3_audio_url || null,
+  s3_audio_url: song.s3_audio_url || null,
+  duration: song.duration || 0,
+})
+
+const mapUser = (u: any): User => ({
+  id: u.id,
+  userid: u.userid,
+  name: u.name,
+  email: u.email || '',
+  avatarUrl: u.avatar_url || null,
+  rankBadge: u.rank_badge || 0,
+  bio: u.bio || '',
+  isPrivate: Boolean(u.is_private),
+  followers: u.followers_count || 0,
+  following: u.following_count || 0,
+  vibes: u.vibes_count || 0,
+})
 
 type SearchMode = 'song' | 'user'
 
@@ -21,7 +48,7 @@ interface SongHistoryItem {
 interface UserHistoryItem {
   id: number
   type: 'user'
-  user: Pick<User, 'id' | 'name' | 'username' | 'avatarUrl'>
+  user: Pick<User, 'id' | 'name' | 'userid' | 'avatarUrl'>
 }
 
 type HistoryItem = SongHistoryItem | UserHistoryItem
@@ -35,14 +62,49 @@ export default function SearchPage() {
   const [isSearching, setIsSearching] = useState(false)
   const [likedSongs, setLikedSongs] = useState<Set<number>>(new Set())
   const [followStatuses, setFollowStatuses] = useState<Record<number, 'none' | 'pending' | 'following'>>({})
-  const [history, setHistory] = useState<HistoryItem[]>([
-    { id: 1, type: 'song', song: mockSongs[0] },
-    { id: 2, type: 'song', song: mockSongs[2] },
-    { id: 3, type: 'user', user: mockUsers[0] },
-    { id: 4, type: 'user', user: mockUsers[1] },
-  ])
+  const [history, setHistory] = useState<HistoryItem[]>([])
 
   const debouncedQuery = useDebounce(query, 400)
+
+  useEffect(() => {
+    const loadHistory = async () => {
+      try {
+        const res = await searchApi.getHistory(mode)
+        const items: HistoryItem[] = (res.data.history || []).map((row: any) => {
+          if (row.type === 'song') {
+            return {
+              id: row.id,
+              type: 'song',
+              song: mapSong({
+                id: row.song_id,
+                youtube_id: row.youtube_id,
+                title: row.title,
+                artist: row.artist,
+                thumbnail_url: row.thumbnail_url,
+                duration: row.duration,
+              }),
+            }
+          }
+
+          return {
+            id: row.id,
+            type: 'user',
+            user: {
+              id: row.user_id,
+              name: row.name,
+              userid: row.userid,
+              avatarUrl: row.avatar_url || null,
+            },
+          }
+        })
+        setHistory(items)
+      } catch {
+        setHistory([])
+      }
+    }
+
+    loadHistory()
+  }, [mode])
 
   useEffect(() => {
     if (!debouncedQuery.trim()) {
@@ -57,10 +119,16 @@ export default function SearchPage() {
       try {
         if (mode === 'song') {
           const res = await searchApi.searchSongs(debouncedQuery)
-          setSongResults(res.data.songs || [])
+          setSongResults((res.data.songs || []).map(mapSong))
         } else {
           const res = await searchApi.searchUsers(debouncedQuery)
-          setUserResults(res.data.users || [])
+          const users = (res.data.users || []).map(mapUser)
+          setUserResults(users)
+          const statuses: Record<number, 'none' | 'pending' | 'following'> = {}
+          for (const raw of res.data.users || []) {
+            statuses[raw.id] = raw.is_following ? 'following' : raw.is_pending ? 'pending' : 'none'
+          }
+          setFollowStatuses(statuses)
         }
       } catch (err) {
         console.error('Search error:', err)
@@ -91,20 +159,31 @@ export default function SearchPage() {
     if (item.type === 'song') {
       play({
         id: item.song.id,
+        youtubeId: (item.song as any).youtube_id || item.song.youtubeId || '',
         title: item.song.title,
         artist: item.song.artist,
-        thumbnailUrl: item.song.thumbnailUrl,
-        audioUrl: item.song.audioUrl,
+        thumbnailUrl: (item.song as any).thumbnail_url || item.song.thumbnailUrl || '',
+        audioUrl: (item.song as any).s3_audio_url || item.song.audioUrl || null,
         duration: item.song.duration,
       })
     }
   }
 
-  const handleHistoryRemove = (id: number) => {
+  const handleHistoryRemove = async (id: number) => {
+    try {
+      await searchApi.removeHistoryItem(id)
+    } catch {
+      // Keep local UX responsive even if request fails
+    }
     setHistory(prev => prev.filter(h => h.id !== id))
   }
 
-  const handleHistoryClearAll = () => {
+  const handleHistoryClearAll = async () => {
+    try {
+      await searchApi.clearHistory(mode)
+    } catch {
+      // Keep local UX responsive even if request fails
+    }
     setHistory(prev => prev.filter(h => h.type !== mode))
   }
 
@@ -117,14 +196,20 @@ export default function SearchPage() {
     })
   }
 
-  const handleFollow = (userId: number) => {
-    setFollowStatuses(prev => {
-      const current = prev[userId] || 'none'
-      return {
-        ...prev,
-        [userId]: current === 'none' ? 'pending' : 'none',
+  const handleFollow = async (userId: number) => {
+    const current = followStatuses[userId] || 'none'
+    const next = current === 'none' ? 'pending' : 'none'
+    setFollowStatuses(prev => ({ ...prev, [userId]: next }))
+
+    try {
+      if (current === 'none') {
+        await usersApi.followUser(userId)
+      } else {
+        await usersApi.unfollowUser(userId)
       }
-    })
+    } catch {
+      setFollowStatuses(prev => ({ ...prev, [userId]: current }))
+    }
   }
 
   const hasResults = mode === 'song'
@@ -220,7 +305,7 @@ export default function SearchPage() {
               No results found
             </h3>
             <p style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
-              Try a different {mode === 'song' ? 'song or artist' : 'username'}
+              Try a different {mode === 'song' ? 'song or artist' : 'userid'}
             </p>
           </div>
         )}
@@ -232,7 +317,7 @@ export default function SearchPage() {
             mode={mode}
             onSelect={handleHistorySelect}
             onRemove={handleHistoryRemove}
-            onSeeAll={() => {}}
+            onSeeAll={() => { }}
             onClearAll={handleHistoryClearAll}
           />
         )}

@@ -20,7 +20,7 @@ def get_notifications():
     rows = query_db(
         """SELECT n.*,
                   u.name as from_name,
-                  u.username as from_username,
+                  u.userid as from_userid,
                   p.avatar_url as from_avatar
            FROM notifications n
            LEFT JOIN users u ON n.from_user_id = u.id

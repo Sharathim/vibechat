@@ -10,7 +10,7 @@ def get_user_settings(user_id):
 def get_blocked_users(user_id):
     from database.db import rows_to_list
     rows = query_db(
-        """SELECT u.id, u.username, u.name,
+        """SELECT u.id, u.userid, u.name,
                   p.avatar_url, bu.created_at
            FROM blocked_users bu
            JOIN users u ON bu.blocked_id = u.id

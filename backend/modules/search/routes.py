@@ -50,7 +50,11 @@ def search_songs_route():
     # Fallback to YouTube API
     results, error = search_songs(query)
     if error:
-        return jsonify({'error': error, 'songs': []}), 400
+        return jsonify({
+            'songs': [],
+            'source': 'external_unavailable',
+            'message': error,
+        })
 
     # Save to DB and return
     songs = []
@@ -79,7 +83,7 @@ def search_users_route():
         return jsonify({'users': []})
 
     rows = query_db(
-        """SELECT u.id, u.username, u.name,
+        """SELECT u.id, u.userid, u.name,
                   u.rank_badge, p.avatar_url,
                   p.is_private,
                   CASE WHEN f.status = 'accepted'
@@ -93,7 +97,7 @@ def search_users_route():
            )
            WHERE u.id != ?
            AND (
-               u.username LIKE ?
+               u.userid LIKE ?
                OR u.name LIKE ?
            )
            AND u.is_active = 1

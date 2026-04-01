@@ -35,7 +35,7 @@ export interface SearchHistoryItem {
   user?: {
     id: number
     name: string
-    username: string
+    userid: string
     avatarUrl: string | null
   }
   searchedAt: string

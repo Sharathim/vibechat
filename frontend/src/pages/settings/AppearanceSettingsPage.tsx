@@ -78,7 +78,7 @@ export default function AppearanceSettingsPage() {
                 padding: 12,
                 height: 100,
               }}>
-                {/* Mock sidebar */}
+                {/* Preview sidebar */}
                 <div style={{ display: 'flex', gap: 8, height: '100%' }}>
                   <div style={{
                     width: 20, background: t.surface,

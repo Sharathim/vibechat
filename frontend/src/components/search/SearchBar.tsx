@@ -31,7 +31,7 @@ export default function SearchBar({
       boxShadow: 'var(--shadow-sm)',
       transition: 'border-color 0.2s',
     }}
-    onClick={() => inputRef.current?.focus()}
+      onClick={() => inputRef.current?.focus()}
     >
       {/* Search icon */}
       <Search size={18} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
@@ -45,7 +45,7 @@ export default function SearchBar({
         placeholder={
           mode === 'song'
             ? 'Search songs...'
-            : 'Search user by username...'
+            : 'Search user by userid...'
         }
         style={{
           flex: 1,

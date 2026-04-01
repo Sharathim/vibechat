@@ -6,7 +6,7 @@
 CREATE TABLE IF NOT EXISTS users (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     email               TEXT UNIQUE NOT NULL,
-    username            TEXT UNIQUE NOT NULL,
+    userid            TEXT UNIQUE NOT NULL,
     name                TEXT NOT NULL,
     password_hash       TEXT,              -- NULL for Google-only users
     google_id           TEXT UNIQUE,       -- Firebase UID, NULL for email-only users
@@ -280,7 +280,7 @@ CREATE TABLE IF NOT EXISTS blocked_vibe_users (
 
 -- ── INDEXES ───────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+CREATE INDEX IF NOT EXISTS idx_users_userid ON users(userid);
 CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id);
 CREATE INDEX IF NOT EXISTS idx_follows_follower ON follows(follower_id);
 CREATE INDEX IF NOT EXISTS idx_follows_following ON follows(following_id);

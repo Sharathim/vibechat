@@ -7,7 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'icons/*.png'],
+      includeAssets: ['favicon.ico', 'favicon.svg'],
       manifest: {
         name: 'VibeChat',
         short_name: 'VibeChat',
@@ -20,46 +20,9 @@ export default defineConfig({
         start_url: '/',
         icons: [
           {
-            src: 'icons/icon-72.png',
-            sizes: '72x72',
-            type: 'image/png',
-          },
-          {
-            src: 'icons/icon-96.png',
-            sizes: '96x96',
-            type: 'image/png',
-          },
-          {
-            src: 'icons/icon-128.png',
-            sizes: '128x128',
-            type: 'image/png',
-          },
-          {
-            src: 'icons/icon-144.png',
-            sizes: '144x144',
-            type: 'image/png',
-          },
-          {
-            src: 'icons/icon-152.png',
-            sizes: '152x152',
-            type: 'image/png',
-          },
-          {
-            src: 'icons/icon-192.png',
-            sizes: '192x192',
-            type: 'image/png',
-            purpose: 'any maskable',
-          },
-          {
-            src: 'icons/icon-384.png',
-            sizes: '384x384',
-            type: 'image/png',
-          },
-          {
-            src: 'icons/icon-512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'any maskable',
+            src: 'favicon.svg',
+            sizes: 'any',
+            type: 'image/svg+xml',
           },
         ],
       },
@@ -104,13 +67,22 @@ export default defineConfig({
     }),
   ],
   server: {
-    port: 3006,
+    port: 7001,
     strictPort: true,
     host: '0.0.0.0',
     proxy: {
       '/api': {
-        target: 'http://localhost:5006',
+        target: 'http://localhost:7002',
         changeOrigin: true,
+      },
+      '/auth': {
+        target: 'http://localhost:7002',
+        changeOrigin: true,
+      },
+      '/socket.io': {
+        target: 'http://localhost:7002',
+        changeOrigin: true,
+        ws: true,
       },
     },
   },

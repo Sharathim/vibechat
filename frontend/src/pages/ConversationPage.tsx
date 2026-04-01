@@ -11,17 +11,39 @@ import chatApi from '../api/chat'
 import { useSocket } from '../context/SocketContext'
 import { useAuth } from '../context/AuthContext'
 import type { VibeSessionData } from '../types/vibe'
-import { mockConversations, mockSongs } from '../data/mockData'
-import type { Message } from '../types/chat'
+import type { Conversation, Message } from '../types/chat'
+import { timeAgo } from '../lib/utils'
+
+const mapConversation = (row: any): Conversation => ({
+  id: row.id,
+  user: {
+    id: row.other_user_id,
+    name: row.name || 'Unknown',
+    userid: row.userid || 'unknown',
+    avatarUrl: row.avatar_url || null,
+  },
+  lastMessage: row.last_message || 'Say hi',
+  lastMessageType: row.last_message_type || 'text',
+  lastMessageAt: row.last_message_at ? timeAgo(row.last_message_at) : '',
+  unreadCount: row.unread_count || 0,
+  isOnline: Boolean(row.show_online_status),
+})
+
+const mapMessage = (row: any): Message => ({
+  id: row.id,
+  conversationId: row.conversation_id,
+  senderId: row.sender_id,
+  type: row.type || 'text',
+  content: row.content || '',
+  isRead: Boolean(row.is_read),
+  createdAt: row.created_at || '',
+})
 
 export default function ConversationPage() {
   const { conversationId } = useParams()
   const navigate = useNavigate()
   const messagesEndRef = useRef<HTMLDivElement>(null)
-
-  const conversation = mockConversations.find(
-    c => c.id === Number(conversationId)
-  )
+  const [conversation, setConversation] = useState<Conversation | null>(null)
 
   const [messages, setMessages] = useState<Message[]>([])
 
@@ -37,8 +59,14 @@ export default function ConversationPage() {
 
     const loadMessages = async () => {
       try {
+        const convRes = await chatApi.getConversations()
+        const conv = (convRes.data.conversations || [])
+          .map(mapConversation)
+          .find((c: Conversation) => c.id === convId)
+        setConversation(conv || null)
+
         const res = await chatApi.getMessages(convId)
-        setMessages(res.data.messages || [])
+        setMessages((res.data.messages || []).map(mapMessage))
       } catch (err) {
         console.error('Failed to load messages:', err)
       }
@@ -95,16 +123,12 @@ export default function ConversationPage() {
     const session: VibeSessionData = {
       id: Date.now().toString(),
       partnerName: conversation.user.name,
-      partnerUsername: conversation.user.username,
+      partnerUserid: conversation.user.userid,
       partnerAvatar: conversation.user.avatarUrl,
       isCoHost: false,
       isHost: true,
-      queue: mockSongs.slice(0, 3).map((s, i) => ({
-        ...s,
-        addedBy: 'You',
-        position: i,
-      })),
-      currentSong: mockSongs[0],
+      queue: [],
+      currentSong: null,
       isPlaying: false,
       progress: 0,
       startedAt: new Date().toISOString(),
@@ -220,12 +244,12 @@ export default function ConversationPage() {
             justifyContent: 'center', cursor: 'pointer',
             color: 'var(--text-secondary)', transition: 'background 0.2s',
           }}
-          onMouseEnter={e =>
-            e.currentTarget.style.background = 'var(--bg-tertiary)'
-          }
-          onMouseLeave={e =>
-            e.currentTarget.style.background = 'none'
-          }>
+            onMouseEnter={e =>
+              e.currentTarget.style.background = 'var(--bg-tertiary)'
+            }
+            onMouseLeave={e =>
+              e.currentTarget.style.background = 'none'
+            }>
             <Phone size={20} />
           </button>
 
@@ -237,20 +261,20 @@ export default function ConversationPage() {
             justifyContent: 'center', cursor: 'pointer',
             color: 'var(--brand-primary)', transition: 'background 0.2s',
           }}
-          onClick={handleStartVibe}
-          onMouseEnter={e =>
-            e.currentTarget.style.background = 'var(--brand-subtle)'
-          }
-          onMouseLeave={e =>
-            e.currentTarget.style.background = 'none'
-          }>
+            onClick={handleStartVibe}
+            onMouseEnter={e =>
+              e.currentTarget.style.background = 'var(--brand-subtle)'
+            }
+            onMouseLeave={e =>
+              e.currentTarget.style.background = 'none'
+            }>
             <Music size={20} />
           </button>
 
           {/* Three dot */}
           <ThreeDotMenu
-            onTurnOffVibe={() => {}}
-            onViewVibes={() => {}}
+            onTurnOffVibe={() => { }}
+            onViewVibes={() => { }}
             onRemoveChat={() => navigate('/chat')}
             onClearChat={async () => {
               try {
@@ -326,7 +350,7 @@ export default function ConversationPage() {
             <MessageBubble
               key={msg.id}
               message={msg}
-              isOwn={msg.senderId === 1}
+              isOwn={msg.senderId === user?.id}
             />
           ))
         )}

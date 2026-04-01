@@ -1,6 +1,6 @@
 import { Play, Heart } from 'lucide-react'
 import type { Song } from '../../types/song'
-import { formatDuration } from '../../data/mockData'
+import { formatDuration } from '../../lib/utils'
 import { useMusic } from '../../context/MusicContext'
 
 interface SongResultProps {

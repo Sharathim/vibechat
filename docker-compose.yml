@@ -1,6 +1,24 @@
-version: "3.9"
-
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: vibechat-postgres
+    environment:
+      POSTGRES_USER: vibechat
+      POSTGRES_PASSWORD: vibechat_secret
+      POSTGRES_DB: vibechat_auth
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - vibechat-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vibechat -d vibechat_auth"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   backend:
     build:
       context: ./backend
@@ -10,14 +28,18 @@ services:
       - ./.env
     environment:
       HOST: 0.0.0.0
-      PORT: 5000
+      PORT: 7002
       DATABASE_PATH: database/vibechat.db
+      DATABASE_URL: postgresql://vibechat:vibechat_secret@postgres:5432/vibechat_auth
     ports:
-      - "5001:5000"
+      - "7002:7002"
     volumes:
       - ./backend/database:/app/database
     networks:
       - vibechat-network
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
 
   frontend:
@@ -29,7 +51,7 @@ services:
         VITE_WS_URL: ${VITE_WS_URL}
     container_name: vibechat-frontend
     ports:
-      - "3000:80"
+      - "7001:80"
     depends_on:
       - backend
     networks:
@@ -39,3 +61,6 @@ services:
 networks:
   vibechat-network:
     driver: bridge
+
+volumes:
+  pgdata:

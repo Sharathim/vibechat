@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useRef, useEffect } from 'react'
 import musicApi from '../api/music'
+import { API_BASE_URL } from '../config'
 
 interface Song {
   id: number
@@ -64,7 +65,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     try {
       // Build stream URL through our backend proxy
       const youtubeId = song.youtubeId || song.id.toString()
-      const streamUrl = `http://localhost:5006/api/music/stream/${youtubeId}`
+      const streamUrl = `${API_BASE_URL}/api/music/stream/${youtubeId}`
 
       audio.src = streamUrl
       audio.load()
