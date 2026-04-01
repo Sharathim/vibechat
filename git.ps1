@@ -1,6 +1,6 @@
 git init
 git add .
-git commit -m "Done with vibechat frontend"
+git commit -m "new vibechat"
 git branch -M main
-git remote add origin https://github.com/Sharathim/vibechat-new_c.git
+git remote add origin https://github.com/Sharathim/vibechat.git
 git push -u origin main
