@@ -99,8 +99,8 @@ jobs:
             docker pull bharath1303/vibechat-frontend:latest
 
             # Restart all containers
-            docker compose down
-            docker compose up -d
+            docker-compose down || true
+            docker-compose up -d
 
             # Clean up old unused images
             docker image prune -f
