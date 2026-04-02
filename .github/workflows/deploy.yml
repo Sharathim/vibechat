@@ -101,6 +101,8 @@ jobs:
             # Restart all containers
             docker-compose down || true
             docker-compose up -d
+            docker run --rm -v ~/vibechat-new/backend/database:/backup bharath1303/vibechat-backend:latest cp -r /app/database/. /backup/
+            sudo systemctl restart nginx
 
             # Clean up old unused images
             docker image prune -f
