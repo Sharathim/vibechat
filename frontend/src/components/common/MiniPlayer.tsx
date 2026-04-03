@@ -7,6 +7,10 @@ export default function MiniPlayer() {
   const navigate = useNavigate()
   const { currentSong, isPlaying, progress, pause, resume, skip } = useMusic()
 
+  if (!currentSong || !isPlaying) {
+    return null
+  }
+
   return (
     <div
       style={{
@@ -23,8 +27,7 @@ export default function MiniPlayer() {
         position: 'relative',
       }}
     >
-      {currentSong ? (
-        <>
+      <>
           {/* Thumbnail */}
           <div
             onClick={() => navigate('/music/now-playing')}
@@ -167,55 +170,6 @@ export default function MiniPlayer() {
             </button>
           </div>
         </>
-      ) : (
-        /* Empty state */
-        <div
-          style={{
-            flex: 1,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-            opacity: 0.5,
-          }}
-        >
-          <div
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 8,
-              background: 'var(--bg-tertiary)',
-              flexShrink: 0,
-            }}
-          />
-          <div>
-            <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>
-              No song playing
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-              Search for a song to play
-            </div>
-          </div>
-          <div style={{ marginLeft: 'auto' }}>
-            <button
-              disabled
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: '50%',
-                background: 'var(--bg-tertiary)',
-                border: 'none',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'not-allowed',
-                color: 'var(--text-muted)',
-              }}
-            >
-              <Play size={18} />
-            </button>
-          </div>
-        </div>
-      )}
 
       <style>{`
         @media (max-width: 767px) {
