@@ -74,7 +74,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
 
       // Log to history
       try {
-        await musicApi.logPlay(song.id)
+        await musicApi.logPlay(song.youtubeId || song.youtube_id || song.id)
       } catch (e) {
         // Non-critical
       }

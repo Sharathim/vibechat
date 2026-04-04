@@ -4,6 +4,7 @@ export interface Song {
   youtube_id?: string
   title: string
   artist: string
+  tags?: string[]
   thumbnailUrl: string
   thumbnail_url?: string
   audioUrl: string | null

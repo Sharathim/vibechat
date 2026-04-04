@@ -72,13 +72,18 @@ def get_song_info(youtube_id):
             if thumbnails:
                 thumbnail_url = thumbnails[-1].get('url', '')
 
+            tags = info.get('tags') or []
+            if not isinstance(tags, list):
+                tags = []
+
             return {
                 'youtube_id': youtube_id,
                 'title': info.get('title', 'Unknown'),
                 'artist': info.get('uploader', 'Unknown'),
+                'tags': tags,
                 'duration': duration,
                 'thumbnail_url': thumbnail_url,
-                'audio_url': info.get('url', ''),
+                'youtube_like_count': int(info.get('like_count') or 0),
             }
 
     except Exception as e:

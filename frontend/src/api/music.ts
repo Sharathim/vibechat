@@ -29,8 +29,10 @@ export const musicApi = {
   getHistory: () =>
     client.get('/api/music/history'),
 
-  logPlay: (songId: number) =>
-    client.post('/api/music/history', { song_id: songId }),
+  logPlay: (songId: number | string) =>
+    client.post('/api/music/history', typeof songId === 'number'
+      ? { song_id: songId }
+      : { youtube_id: songId }),
 
   deleteHistoryItem: (historyId: number) =>
     client.delete(`/api/music/history/${historyId}`),

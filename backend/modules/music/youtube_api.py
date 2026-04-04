@@ -98,11 +98,7 @@ def search_songs(query, max_results=10):
         data = _get_json(YOUTUBE_SEARCH_URL, params)
 
         if 'error' in data:
-            print(f"YouTube API returned error, falling back to yt-dlp: {data['error'].get('message', 'unknown')}")
-            fallback_results = _search_songs_with_ytdlp(query, max_results)
-            if fallback_results:
-                return fallback_results, None
-            return [], data['error']['message']
+            return [], data['error'].get('message', 'unknown')
 
         items = data.get('items', [])
         video_ids = [item['id']['videoId'] for item in items]
@@ -139,19 +135,16 @@ def search_songs(query, max_results=10):
                 'artist': snippet['channelTitle'],
                 'thumbnail_url': thumbnail,
                 'duration': duration,
+                'tags': [],
+                'youtube_like_count': 0,
+                'vibechat_like_count': 0,
+                'listened_count': 0,
             })
 
         return results, None
 
     except Exception as e:
         print(f"YouTube API error: {e}")
-        try:
-            fallback_results = _search_songs_with_ytdlp(query, max_results)
-            if fallback_results:
-                return fallback_results, None
-        except Exception as fallback_error:
-            print(f"yt-dlp fallback error: {fallback_error}")
-
         return [], str(e)
 
 

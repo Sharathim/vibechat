@@ -1,11 +1,11 @@
 from flask import Blueprint, request, jsonify, session, Response, stream_with_context
 from .helpers import (
-    get_or_create_song, get_liked_songs,
+    ensure_song_record, get_liked_songs,
     get_downloads, get_listening_history, log_play
 )
-from .youtube_api import search_songs
 from .ytdlp import get_audio_url, get_song_info
 from database.db import execute_db, query_db, row_to_dict, rows_to_list
+from database.pg_db import query_pg
 from modules.auth.helpers import get_current_user
 import requests as req
 
@@ -45,6 +45,22 @@ def stream_song(youtube_id):
     user, err, code = require_auth()
     if err:
         return err, code
+
+    pg_song = query_pg(
+        "SELECT youtube_id FROM songs WHERE youtube_id = %s",
+        (youtube_id,), one=True
+    )
+    if not pg_song:
+        metadata = get_song_info(youtube_id)
+        if metadata:
+            ensure_song_record(
+                youtube_id=metadata['youtube_id'],
+                title=metadata['title'],
+                tags=metadata.get('tags', []),
+                duration=metadata.get('duration', 0),
+                thumbnail_url=metadata.get('thumbnail_url', ''),
+                youtube_like_count=metadata.get('youtube_like_count', 0),
+            )
 
     # Check DB for cached S3 URL first
     song = query_db(
@@ -120,10 +136,35 @@ def add_to_history():
     if err:
         return err, code
 
-    data = request.get_json()
+    data = request.get_json() or {}
     song_id = data.get('song_id')
-    if not song_id:
+    youtube_id = data.get('youtube_id')
+
+    if not song_id and not youtube_id:
         return jsonify({'error': 'song_id required'}), 400
+
+    if not song_id and youtube_id:
+        legacy_song = query_db(
+            "SELECT id FROM songs WHERE youtube_id = ?",
+            (youtube_id,), one=True
+        )
+        if not legacy_song:
+            metadata = get_song_info(youtube_id)
+            if metadata:
+                ensure_song_record(
+                    youtube_id=metadata['youtube_id'],
+                    title=metadata['title'],
+                    tags=metadata.get('tags', []),
+                    duration=metadata.get('duration', 0),
+                    thumbnail_url=metadata.get('thumbnail_url', ''),
+                    youtube_like_count=metadata.get('youtube_like_count', 0),
+                )
+            legacy_song = query_db(
+                "SELECT id FROM songs WHERE youtube_id = ?",
+                (youtube_id,), one=True
+            )
+        if legacy_song:
+            song_id = legacy_song['id']
 
     log_play(user['id'], song_id)
     return jsonify({'success': True})

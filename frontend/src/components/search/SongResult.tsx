@@ -88,7 +88,7 @@ export default function SongResult({
           fontSize: 12,
           color: 'var(--text-secondary)',
         }}>
-          {song.artist}
+          {song.artist || song.tags?.slice(0, 2).join(' • ') || 'YouTube'}
         </div>
       </div>
 

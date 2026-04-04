@@ -10,12 +10,24 @@ import { useMusic } from '../context/MusicContext'
 import searchApi from '../api/search'
 import usersApi from '../api/users'
 
+const stableSongId = (value: string): number => {
+  let hash = 0
+  for (let index = 0; index < value.length; index += 1) {
+    hash = ((hash << 5) - hash) + value.charCodeAt(index)
+    hash |= 0
+  }
+  return Math.abs(hash)
+}
+
 const mapSong = (song: any): Song => ({
-  id: song.id,
+  id: typeof song.id === 'number'
+    ? song.id
+    : stableSongId(song.youtube_id || song.youtubeId || song.title || ''),
   youtubeId: song.youtube_id,
   youtube_id: song.youtube_id,
   title: song.title,
-  artist: song.artist,
+  artist: song.artist || (song.tags || []).slice(0, 2).join(' • ') || 'YouTube',
+  tags: song.tags || [],
   thumbnailUrl: song.thumbnail_url || '',
   thumbnail_url: song.thumbnail_url || '',
   audioUrl: song.s3_audio_url || null,
