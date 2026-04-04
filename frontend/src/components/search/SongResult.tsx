@@ -1,20 +1,32 @@
 import { Play, Heart } from 'lucide-react'
 import type { Song } from '../../types/song'
 import { formatDuration } from '../../lib/utils'
+import { useMusic } from '../../context/MusicContext'
 
 interface SongResultProps {
   song: Song
   isLiked?: boolean
   onLike?: () => void
-  onPlay?: () => void
 }
 
 export default function SongResult({
   song,
   isLiked = false,
   onLike,
-  onPlay,
 }: SongResultProps) {
+  const { play } = useMusic()
+
+  const handlePlay = () => {
+    play({
+      id: song.id,
+      youtubeId: (song as any).youtube_id || song.youtubeId || '',
+      title: song.title,
+      artist: song.artist,
+      thumbnailUrl: (song as any).thumbnail_url || song.thumbnailUrl || '',
+      audioUrl: (song as any).s3_audio_url || song.audioUrl || null,
+      duration: song.duration,
+    })
+  }
 
   return (
     <div
@@ -28,7 +40,6 @@ export default function SongResult({
         borderRadius: 12,
         margin: '0 4px',
       }}
-      onClick={onPlay}
       onMouseEnter={e =>
         e.currentTarget.style.background = 'var(--bg-tertiary)'
       }
@@ -59,7 +70,9 @@ export default function SongResult({
       </div>
 
       {/* Song info */}
-      <div style={{ flex: 1, overflow: 'hidden' }}>
+      <div style={{ flex: 1, overflow: 'hidden' }}
+        onClick={handlePlay}
+      >
         <div style={{
           fontSize: 14,
           fontWeight: 600,
@@ -113,7 +126,7 @@ export default function SongResult({
 
       {/* Play button */}
       <button
-        onClick={e => { e.stopPropagation(); onPlay && onPlay() }}
+        onClick={e => { e.stopPropagation(); handlePlay() }}
         style={{
           width: 36,
           height: 36,

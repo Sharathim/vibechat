@@ -20,9 +20,7 @@ services:
       retries: 5
 
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    image: bharath1303/vibechat-backend:latest
     container_name: vibechat-backend
     env_file:
       - ./.env
@@ -35,7 +33,7 @@ services:
       - "7002:7002"
     volumes:
       - ./backend/database:/app/database
-      - ./backend/firebase-credentials.json:/app/firebase-credentials.json
+      - ./firebase-credentials.json:/app/firebase-credentials.json
     networks:
       - vibechat-network
     depends_on:

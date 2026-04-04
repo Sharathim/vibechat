@@ -3,8 +3,6 @@ import os
 from config import Config
 
 def get_db():
-    # This function is now deprecated for search, but kept for other modules
-    # that have not been migrated from SQLite to PostgreSQL.
     db_path = Config.DATABASE_PATH
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
     conn = sqlite3.connect(db_path)
@@ -14,8 +12,6 @@ def get_db():
     return conn
 
 def init_db():
-    # This function is now deprecated for search, but kept for other modules
-    # that have not been migrated from SQLite to PostgreSQL.
     conn = get_db()
     schema_path = os.path.join(
         os.path.dirname(__file__), 'schema.sql'
@@ -24,11 +20,9 @@ def init_db():
         conn.executescript(f.read())
     conn.commit()
     conn.close()
-    print("✅ SQLite Database initialized successfully (deprecated for search)")
+    print("✅ Database initialized successfully")
 
 def query_db(query, args=(), one=False):
-    # This function is now deprecated for search, but kept for other modules
-    # that have not been migrated from SQLite to PostgreSQL.
     conn = get_db()
     try:
         cur = conn.execute(query, args)
@@ -39,8 +33,6 @@ def query_db(query, args=(), one=False):
         conn.close()
 
 def execute_db(query, args=()):
-    # This function is now deprecated for search, but kept for other modules
-    # that have not been migrated from SQLite to PostgreSQL.
     conn = get_db()
     try:
         cur = conn.execute(query, args)

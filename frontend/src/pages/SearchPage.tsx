@@ -9,17 +9,18 @@ import { useDebounce } from '../hooks/useDebounce'
 import { useMusic } from '../context/MusicContext'
 import searchApi from '../api/search'
 import usersApi from '../api/users'
-import musicApi from '../api/music'
 
 const mapSong = (song: any): Song => ({
-  id: song.id, // This might be null for YT results
+  id: song.id,
   youtubeId: song.youtube_id,
+  youtube_id: song.youtube_id,
   title: song.title,
   artist: song.artist,
   thumbnailUrl: song.thumbnail_url || '',
+  thumbnail_url: song.thumbnail_url || '',
+  audioUrl: song.s3_audio_url || null,
+  s3_audio_url: song.s3_audio_url || null,
   duration: song.duration || 0,
-  vibechatLikeCount: song.vibechat_like_count || 0,
-  listenedCount: song.listened_count || 0,
 })
 
 const mapUser = (u: any): User => ({
@@ -38,13 +39,19 @@ const mapUser = (u: any): User => ({
 
 type SearchMode = 'song' | 'user'
 
-interface HistoryItem {
+interface SongHistoryItem {
   id: number
-  type: 'song' | 'user'
-  reference_id: string
-  song?: Song
-  user?: Pick<User, 'id' | 'name' | 'userid' | 'avatarUrl'>
+  type: 'song'
+  song: Song
 }
+
+interface UserHistoryItem {
+  id: number
+  type: 'user'
+  user: Pick<User, 'id' | 'name' | 'userid' | 'avatarUrl'>
+}
+
+type HistoryItem = SongHistoryItem | UserHistoryItem
 
 export default function SearchPage() {
   const { play } = useMusic()
@@ -53,8 +60,7 @@ export default function SearchPage() {
   const [songResults, setSongResults] = useState<Song[]>([])
   const [userResults, setUserResults] = useState<User[]>([])
   const [isSearching, setIsSearching] = useState(false)
-  const [searchError, setSearchError] = useState<string | null>(null)
-  const [likedSongs, setLikedSongs] = useState<Set<string>>(new Set())
+  const [likedSongs, setLikedSongs] = useState<Set<number>>(new Set())
   const [followStatuses, setFollowStatuses] = useState<Record<number, 'none' | 'pending' | 'following'>>({})
   const [history, setHistory] = useState<HistoryItem[]>([])
 
@@ -64,11 +70,39 @@ export default function SearchPage() {
     const loadHistory = async () => {
       try {
         const res = await searchApi.getHistory(mode)
-        setHistory(res.data.history || [])
+        const items: HistoryItem[] = (res.data.history || []).map((row: any) => {
+          if (row.type === 'song') {
+            return {
+              id: row.id,
+              type: 'song',
+              song: mapSong({
+                id: row.song_id,
+                youtube_id: row.youtube_id,
+                title: row.title,
+                artist: row.artist,
+                thumbnail_url: row.thumbnail_url,
+                duration: row.duration,
+              }),
+            }
+          }
+
+          return {
+            id: row.id,
+            type: 'user',
+            user: {
+              id: row.user_id,
+              name: row.name,
+              userid: row.userid,
+              avatarUrl: row.avatar_url || null,
+            },
+          }
+        })
+        setHistory(items)
       } catch {
         setHistory([])
       }
     }
+
     loadHistory()
   }, [mode])
 
@@ -76,12 +110,10 @@ export default function SearchPage() {
     if (!debouncedQuery.trim()) {
       setSongResults([])
       setUserResults([])
-      setSearchError(null)
       return
     }
 
     setIsSearching(true)
-    setSearchError(null)
 
     const doSearch = async () => {
       try {
@@ -98,9 +130,8 @@ export default function SearchPage() {
           }
           setFollowStatuses(statuses)
         }
-      } catch (err: any) {
+      } catch (err) {
         console.error('Search error:', err)
-        setSearchError(err.response?.data?.message || 'Search failed. Please try again.')
         setSongResults([])
         setUserResults([])
       } finally {
@@ -111,75 +142,58 @@ export default function SearchPage() {
     doSearch()
   }, [debouncedQuery, mode])
 
-  const handlePlayAndUpsert = async (song: Song) => {
-    // Upsert song metadata on selection
-    try {
-      await musicApi.upsertSong(song.youtubeId)
-    } catch (err) {
-      console.warn('Failed to upsert song metadata:', err)
-    }
-    play(song)
-  }
-
   const handleModeChange = (newMode: SearchMode) => {
     setMode(newMode)
     setQuery('')
     setSongResults([])
     setUserResults([])
-    setSearchError(null)
   }
 
   const handleClear = () => {
     setQuery('')
     setSongResults([])
     setUserResults([])
-    setSearchError(null)
   }
 
   const handleHistorySelect = (item: HistoryItem) => {
-    if (item.type === 'song' && item.song) {
-      handlePlayAndUpsert(item.song)
+    if (item.type === 'song') {
+      play({
+        id: item.song.id,
+        youtubeId: (item.song as any).youtube_id || item.song.youtubeId || '',
+        title: item.song.title,
+        artist: item.song.artist,
+        thumbnailUrl: (item.song as any).thumbnail_url || item.song.thumbnailUrl || '',
+        audioUrl: (item.song as any).s3_audio_url || item.song.audioUrl || null,
+        duration: item.song.duration,
+      })
     }
   }
 
   const handleHistoryRemove = async (id: number) => {
     try {
       await searchApi.removeHistoryItem(id)
-    } catch { /* UX is responsive */ }
+    } catch {
+      // Keep local UX responsive even if request fails
+    }
     setHistory(prev => prev.filter(h => h.id !== id))
   }
 
   const handleHistoryClearAll = async () => {
     try {
       await searchApi.clearHistory(mode)
-    } catch { /* UX is responsive */ }
+    } catch {
+      // Keep local UX responsive even if request fails
+    }
     setHistory(prev => prev.filter(h => h.type !== mode))
   }
 
-  const handleLike = async (youtubeId: string) => {
-    const isCurrentlyLiked = likedSongs.has(youtubeId)
+  const handleLike = (songId: number) => {
     setLikedSongs(prev => {
       const next = new Set(prev)
-      if (isCurrentlyLiked) next.delete(youtubeId)
-      else next.add(youtubeId)
+      if (next.has(songId)) next.delete(songId)
+      else next.add(songId)
       return next
     })
-
-    try {
-      if (isCurrentlyLiked) {
-        await musicApi.unlikeSong(youtubeId)
-      } else {
-        await musicApi.likeSong(youtubeId)
-      }
-    } catch {
-      // Revert on error
-      setLikedSongs(prev => {
-        const next = new Set(prev)
-        if (isCurrentlyLiked) next.add(youtubeId)
-        else next.delete(youtubeId)
-        return next
-      })
-    }
   }
 
   const handleFollow = async (userId: number) => {
@@ -243,33 +257,47 @@ export default function SearchPage() {
         overflowY: 'auto',
         overflowX: 'hidden',
       }}>
+        {/* Loading skeleton */}
         {isSearching && (
           <div style={{ padding: '16px' }}>
             {[1, 2, 3, 4].map(i => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0' }}>
-                <div className="skeleton" style={{ width: 48, height: 48, borderRadius: 8, flexShrink: 0 }} />
+              <div
+                key={i}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '10px 0',
+                }}
+              >
+                <div
+                  className="skeleton"
+                  style={{ width: 48, height: 48, borderRadius: 8, flexShrink: 0 }}
+                />
                 <div style={{ flex: 1 }}>
-                  <div className="skeleton" style={{ height: 14, width: '60%', marginBottom: 6 }} />
-                  <div className="skeleton" style={{ height: 12, width: '40%' }} />
+                  <div
+                    className="skeleton"
+                    style={{ height: 14, width: '60%', marginBottom: 6 }}
+                  />
+                  <div
+                    className="skeleton"
+                    style={{ height: 12, width: '40%' }}
+                  />
                 </div>
               </div>
             ))}
           </div>
         )}
 
-        {searchError && !isSearching && (
-          <div style={{ padding: '60px 24px', textAlign: 'center' }}>
-            <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8, color: 'var(--error)' }}>
-              Search Failed
-            </h3>
-            <p style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
-              {searchError}
-            </p>
-          </div>
-        )}
-
-        {!isSearching && !searchError && query && !hasResults && (
-          <div style={{ padding: '60px 24px', textAlign: 'center' }}>
+        {/* No results */}
+        {!isSearching && query && !hasResults && (
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            padding: '60px 24px',
+            textAlign: 'center',
+          }}>
             <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.4 }}>
               {mode === 'song' ? '🎵' : '👤'}
             </div>
@@ -277,11 +305,12 @@ export default function SearchPage() {
               No results found
             </h3>
             <p style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
-              Try a different {mode === 'song' ? 'song or artist' : 'query'}
+              Try a different {mode === 'song' ? 'song or artist' : 'userid'}
             </p>
           </div>
         )}
 
+        {/* History (when no query) */}
         {!query && !isSearching && (
           <SearchHistory
             items={history}
@@ -293,16 +322,17 @@ export default function SearchPage() {
           />
         )}
 
+        {/* Song results */}
         {!isSearching && mode === 'song' && songResults.map(song => (
           <SongResult
-            key={song.youtubeId}
+            key={song.id}
             song={song}
-            isLiked={likedSongs.has(song.youtubeId)}
-            onLike={() => handleLike(song.youtubeId)}
-            onPlay={() => handlePlayAndUpsert(song)}
+            isLiked={likedSongs.has(song.id)}
+            onLike={() => handleLike(song.id)}
           />
         ))}
 
+        {/* User results */}
         {!isSearching && mode === 'user' && userResults.map(user => (
           <UserResult
             key={user.id}

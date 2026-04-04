@@ -1,8 +1,8 @@
 import requests
+import yt_dlp
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from config import Config
-import re
 
 YOUTUBE_SEARCH_URL = "https://www.googleapis.com/youtube/v3/search"
 YOUTUBE_VIDEO_URL = "https://www.googleapis.com/youtube/v3/videos"
@@ -33,6 +33,51 @@ def _get_json(url, params):
     return response.json()
 
 
+def _search_songs_with_ytdlp(query, max_results):
+    opts = {
+        'quiet': True,
+        'no_warnings': True,
+        'extract_flat': True,
+        'skip_download': True,
+    }
+
+    search_query = f"ytsearch{max_results}:{query} official audio OR official video OR lyrics"
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        info = ydl.extract_info(search_query, download=False)
+
+    entries = (info or {}).get('entries', []) or []
+    results = []
+
+    for entry in entries:
+        if not entry:
+            continue
+
+        video_id = entry.get('id')
+        if not video_id:
+            continue
+
+        duration = int(entry.get('duration') or 0)
+        if duration > 600:
+            continue
+
+        thumbnails = entry.get('thumbnails') or []
+        thumbnail_url = ''
+        if thumbnails:
+            thumbnail_url = thumbnails[-1].get('url', '') or ''
+
+        if thumbnail_url.startswith('http://'):
+            thumbnail_url = thumbnail_url.replace('http://', 'https://', 1)
+
+        results.append({
+            'youtube_id': video_id,
+            'title': entry.get('title') or 'Unknown title',
+            'artist': entry.get('uploader') or entry.get('channel') or 'Unknown artist',
+            'thumbnail_url': thumbnail_url,
+            'duration': duration,
+        })
+
+    return results
+
 def search_songs(query, max_results=10):
     if not Config.YOUTUBE_API_KEY:
         return [], "YouTube API key not configured"
@@ -40,23 +85,29 @@ def search_songs(query, max_results=10):
     try:
         params = {
             'part': 'snippet',
-            'q': query,
+            'q': f"{query} official audio OR official video OR lyrics",
             'type': 'video',
-            'videoCategoryId': '10',  # Music category
+            'videoCategoryId': '10',
+            'topicId': '/m/04rlf',
             'maxResults': max_results,
             'key': Config.YOUTUBE_API_KEY,
-            'videoDuration': 'any',
+            'videoDuration': 'medium',
             'order': 'relevance',
         }
 
         data = _get_json(YOUTUBE_SEARCH_URL, params)
 
         if 'error' in data:
+            print(f"YouTube API returned error, falling back to yt-dlp: {data['error'].get('message', 'unknown')}")
+            fallback_results = _search_songs_with_ytdlp(query, max_results)
+            if fallback_results:
+                return fallback_results, None
             return [], data['error']['message']
 
         items = data.get('items', [])
         video_ids = [item['id']['videoId'] for item in items]
 
+        # Get video details (duration etc.)
         details = get_video_details(video_ids)
         details_map = {d['id']: d for d in details}
 
@@ -67,14 +118,20 @@ def search_songs(query, max_results=10):
             detail = details_map.get(video_id, {})
 
             duration = detail.get('duration', 0)
-            if duration > 600:  # Skip videos longer than 10 minutes
+
+            # Skip videos longer than 10 minutes
+            if duration > 600:
                 continue
 
             thumbnail = (
+                snippet['thumbnails'].get('maxres', {}).get('url') or
                 snippet['thumbnails'].get('high', {}).get('url') or
                 snippet['thumbnails'].get('medium', {}).get('url') or
-                ''
+                snippet['thumbnails'].get('default', {}).get('url', '')
             )
+            # Force HTTPS
+            if thumbnail.startswith('http://'):
+                thumbnail = thumbnail.replace('http://', 'https://', 1)
 
             results.append({
                 'youtube_id': video_id,
@@ -82,14 +139,19 @@ def search_songs(query, max_results=10):
                 'artist': snippet['channelTitle'],
                 'thumbnail_url': thumbnail,
                 'duration': duration,
-                'youtube_like_count': detail.get('like_count'),
-                'tags': detail.get('tags', []),
             })
 
         return results, None
 
     except Exception as e:
         print(f"YouTube API error: {e}")
+        try:
+            fallback_results = _search_songs_with_ytdlp(query, max_results)
+            if fallback_results:
+                return fallback_results, None
+        except Exception as fallback_error:
+            print(f"yt-dlp fallback error: {fallback_error}")
+
         return [], str(e)
 
 
@@ -99,7 +161,7 @@ def get_video_details(video_ids):
 
     try:
         params = {
-            'part': 'contentDetails,snippet,statistics',
+            'part': 'contentDetails,snippet',
             'id': ','.join(video_ids),
             'key': Config.YOUTUBE_API_KEY,
         }
@@ -113,8 +175,8 @@ def get_video_details(video_ids):
             results.append({
                 'id': item['id'],
                 'duration': duration,
-                'like_count': int(item.get('statistics', {}).get('likeCount', 0)),
-                'tags': item.get('snippet', {}).get('tags', []),
+                'title': item['snippet']['title'],
+                'channel': item['snippet']['channelTitle'],
             })
 
         return results
@@ -125,6 +187,7 @@ def get_video_details(video_ids):
 
 
 def parse_duration(duration_str):
+    import re
     pattern = r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?'
     match = re.match(pattern, duration_str)
     if not match:
