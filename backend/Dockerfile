@@ -12,4 +12,4 @@ COPY . .
 
 EXPOSE 7002
 
-CMD ["gunicorn", "--worker-class", "eventlet", "--workers", "1", "--timeout", "60", "--bind", "0.0.0.0:7002", "app:create_app()"]
+CMD ["gunicorn", "--worker-class", "eventlet", "--workers", "1", "--timeout", "180", "--bind", "0.0.0.0:7002", "app:create_app()"]

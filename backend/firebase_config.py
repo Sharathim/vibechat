@@ -22,6 +22,9 @@ FIREBASE_CERTS_URL = 'https://www.googleapis.com/robot/v1/metadata/x509/secureto
 GOOGLE_CERTS_URL = 'https://www.googleapis.com/oauth2/v1/certs'
 
 FIREBASE_CERTS_CACHE_PATH = os.getenv('FIREBASE_CERTS_CACHE_PATH', 'database/firebase_certs_cache.json')
+CERT_FETCH_RETRIES = int(os.getenv('FIREBASE_CERT_FETCH_RETRIES', '1'))
+CERT_FETCH_TIMEOUT_SECONDS = float(os.getenv('FIREBASE_CERT_FETCH_TIMEOUT_SECONDS', '2.5'))
+CERT_FETCH_RETRY_DELAY_SECONDS = float(os.getenv('FIREBASE_CERT_FETCH_RETRY_DELAY_SECONDS', '0.25'))
 
 # In-memory cache of parsed public keys: {kid: RSAPublicKey}
 _firebase_public_keys = {}
@@ -66,7 +69,11 @@ def _load_certs_from_disk(cache_path: str) -> dict | None:
     return None
 
 
-def _fetch_certs_with_retry(url: str, retries: int = 3, timeout: int = 10) -> dict:
+def _fetch_certs_with_retry(
+    url: str,
+    retries: int = CERT_FETCH_RETRIES,
+    timeout: float = CERT_FETCH_TIMEOUT_SECONDS,
+) -> dict:
     """Fetch certs from a URL with retries."""
     last_error = Exception('All retries failed')
     for attempt in range(retries):
@@ -80,7 +87,7 @@ def _fetch_certs_with_retry(url: str, retries: int = 3, timeout: int = 10) -> di
         except Exception as e:
             last_error = e
             if attempt < retries - 1:
-                time.sleep(1)
+                time.sleep(CERT_FETCH_RETRY_DELAY_SECONDS)
     raise last_error
 
 

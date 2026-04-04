@@ -20,7 +20,10 @@ services:
       retries: 5
 
   backend:
-    image: bharath1303/vibechat-backend:latest
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: vibechat-backend:local
     container_name: vibechat-backend
     env_file:
       - ./.env
@@ -33,7 +36,7 @@ services:
       - "7002:7002"
     volumes:
       - ./backend/database:/app/database
-      - ./firebase-credentials.json:/app/firebase-credentials.json
+      - ./backend/firebase-credentials.json:/app/firebase-credentials.json
     networks:
       - vibechat-network
     depends_on:
@@ -42,7 +45,13 @@ services:
     restart: unless-stopped
 
   frontend:
-    image: bharath1303/vibechat-frontend:latest
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ""
+        VITE_WS_URL: ""
+    image: vibechat-frontend:local
     container_name: vibechat-frontend
     ports:
       - "7001:80"
