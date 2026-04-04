@@ -1,5 +1,6 @@
 import requests
 import yt_dlp
+from requests.exceptions import RequestException
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from config import Config
@@ -79,8 +80,15 @@ def _search_songs_with_ytdlp(query, max_results):
     return results
 
 def search_songs(query, max_results=10):
+    if not query or not query.strip():
+        return [], None
+
     if not Config.YOUTUBE_API_KEY:
-        return [], "YouTube API key not configured"
+        try:
+            return _search_songs_with_ytdlp(query, max_results), None
+        except Exception as e:
+            print(f"yt-dlp fallback error: {e}")
+            return [], "Song search temporarily unavailable"
 
     try:
         params = {
@@ -143,9 +151,16 @@ def search_songs(query, max_results=10):
 
         return results, None
 
+    except RequestException as e:
+        print(f"YouTube API network error: {e.__class__.__name__}")
+        try:
+            return _search_songs_with_ytdlp(query, max_results), None
+        except Exception as fallback_error:
+            print(f"yt-dlp fallback error: {fallback_error}")
+            return [], "External music providers are currently unavailable"
     except Exception as e:
-        print(f"YouTube API error: {e}")
-        return [], str(e)
+        print(f"YouTube API error: {e.__class__.__name__}")
+        return [], "YouTube search failed"
 
 
 def get_video_details(video_ids):

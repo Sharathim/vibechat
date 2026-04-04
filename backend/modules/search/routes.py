@@ -4,8 +4,8 @@ from .helpers import (
     remove_search_history_item, clear_search_history
 )
 from modules.music.youtube_api import search_songs
+from modules.music.helpers import get_or_create_song
 from modules.auth.helpers import get_current_user
-from database.pg_db import query_pg
 from database.db import query_db, rows_to_list
 
 search_bp = Blueprint('search', __name__)
@@ -15,62 +15,6 @@ def require_auth():
     if not user:
         return None, jsonify({'error': 'Not authenticated'}), 401
     return user, None, None
-
-
-def _search_terms(query):
-    terms = []
-    for term in query.replace(',', ' ').split():
-        cleaned = term.strip().lower()
-        if cleaned:
-            terms.append(cleaned)
-    return terms
-
-
-def _search_db_songs(query, limit=10):
-    terms = _search_terms(query)
-    if not terms:
-        return []
-
-    try:
-        return query_pg(
-            """SELECT
-                   youtube_id,
-                   title,
-                   thumbnail_url,
-                   tags,
-                   youtube_like_count,
-                   vibechat_like_count,
-                   duration,
-                   listened_count,
-                   created_at
-               FROM songs
-               WHERE title ILIKE %s
-                  OR EXISTS (
-                      SELECT 1
-                      FROM unnest(COALESCE(tags, ARRAY[]::text[])) AS tag
-                      WHERE LOWER(tag) = ANY(%s)
-                  )
-               ORDER BY listened_count DESC, youtube_like_count DESC, title ASC
-               LIMIT %s""",
-            (f'%{query}%', terms, limit)
-        )
-    except Exception:
-        # If PostgreSQL is unavailable, fall back to YouTube-only search.
-        return []
-
-
-def _merge_search_results(db_results, youtube_results):
-    songs = [dict(song) for song in db_results]
-    seen_ids = {song.get('youtube_id') for song in songs if song.get('youtube_id')}
-    if youtube_results:
-        for song in youtube_results:
-            youtube_id = song.get('youtube_id')
-            if youtube_id and youtube_id in seen_ids:
-                continue
-            if youtube_id:
-                seen_ids.add(youtube_id)
-            songs.append(song)
-    return songs
 
 
 # ── SEARCH SONGS ──────────────────────────────────
@@ -84,26 +28,20 @@ def search_songs_route():
     if not query:
         return jsonify({'songs': []})
 
-    db_results = _search_db_songs(query, limit=10)
-    if len(db_results) >= 10:
-        return jsonify({'songs': db_results[:10], 'source': 'database'})
+    # Search in DB first
+    db_results = query_db(
+        """SELECT * FROM songs
+           WHERE title LIKE ? OR artist LIKE ?
+           LIMIT 20""",
+        (f'%{query}%', f'%{query}%')
+    )
 
-    if db_results and len(db_results) < 10:
-        remaining = 10 - len(db_results)
-        youtube_results, error = search_songs(query, max_results=remaining)
-        if error:
-            return jsonify({
-                'songs': db_results,
-                'source': 'database',
-                'message': error,
-            })
+    if db_results:
+        songs = rows_to_list(db_results)
+        return jsonify({'songs': songs, 'source': 'database'})
 
-        return jsonify({
-            'songs': _merge_search_results(db_results, youtube_results)[:10],
-            'source': 'mixed',
-        })
-
-    results, error = search_songs(query, max_results=10)
+    # External search (YouTube API with yt-dlp fallback)
+    results, error = search_songs(query)
     if error:
         return jsonify({
             'songs': [],
@@ -111,7 +49,19 @@ def search_songs_route():
             'message': error,
         })
 
-    return jsonify({'songs': results[:10], 'source': 'youtube'})
+    # Save to DB and return
+    songs = []
+    for r in results:
+        song = get_or_create_song(
+            youtube_id=r['youtube_id'],
+            title=r['title'],
+            artist=r['artist'],
+            duration=r['duration'],
+            thumbnail_url=r['thumbnail_url'],
+        )
+        songs.append(song)
+
+    return jsonify({'songs': songs, 'source': 'external'})
 
 
 # ── SEARCH USERS ──────────────────────────────────
