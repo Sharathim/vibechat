@@ -19,6 +19,17 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
 
+    # Set secret key for session management
+    app.secret_key = Config.SECRET_KEY
+
+    # Configure Flask session for cross-origin
+    app.config['SESSION_COOKIE_NAME'] = Config.SESSION_COOKIE_NAME
+    app.config['SESSION_COOKIE_HTTPONLY'] = Config.SESSION_COOKIE_HTTPONLY
+    app.config['SESSION_COOKIE_SECURE'] = Config.SESSION_COOKIE_SECURE
+    app.config['SESSION_COOKIE_SAMESITE'] = Config.SESSION_COOKIE_SAMESITE
+    app.config['PERMANENT_SESSION_LIFETIME'] = 2592000  # 30 days
+    app.config['SESSION_REFRESH_EACH_REQUEST'] = True
+
     @app.after_request
     def apply_security_headers(response):
         response.headers['Cross-Origin-Opener-Policy'] = 'same-origin-allow-popups'

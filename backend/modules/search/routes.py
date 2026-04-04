@@ -3,10 +3,10 @@ from .helpers import (
     get_search_history, add_search_history,
     remove_search_history_item, clear_search_history
 )
-from modules.music.youtube_api import search_songs
-from modules.music.helpers import get_or_create_song
+from modules.music.youtube_api import search_songs as search_youtube
+from modules.music.helpers import get_or_create_song_pg
 from modules.auth.helpers import get_current_user
-from database.db import query_db, rows_to_list
+from database.pg_db import query_pg
 from config import Config
 
 search_bp = Blueprint('search', __name__)
@@ -29,46 +29,45 @@ def search_songs_route():
     if not query:
         return jsonify({'songs': []})
 
-    # Search in DB first
-    db_results = query_db(
-        """SELECT * FROM songs
-           WHERE title LIKE ? OR artist LIKE ?
-           LIMIT 20""",
-        (f'%{query}%', f'%{query}%')
+    # Step 1: Search PostgreSQL first
+    db_results = query_pg(
+        """
+        SELECT *,
+               (ts_rank(to_tsvector('english', title), websearch_to_tsquery('english', %s))) as rank
+        FROM songs
+        WHERE to_tsvector('english', title) @@ websearch_to_tsquery('english', %s)
+           OR tags @> ARRAY[%s]
+        ORDER BY listened_count DESC, youtube_like_count DESC, rank DESC
+        LIMIT 10
+        """,
+        (query, query, query)
     )
 
-    if db_results:
-        songs = rows_to_list(db_results)
-        return jsonify({'songs': songs, 'source': 'database'})
+    songs = db_results or []
+    source = 'database'
 
-    if not Config.YOUTUBE_API_KEY:
-        return jsonify({
-            'songs': [],
-            'message': 'YouTube API not configured'
-        })
+    # Step 2: Return results based on availability
+    if len(songs) < 10:
+        limit = 10 - len(songs)
+        yt_results, error = search_youtube(query, max_results=limit)
 
-    # Fallback to YouTube API
-    results, error = search_songs(query)
-    if error:
-        return jsonify({
-            'songs': [],
-            'source': 'external_unavailable',
-            'message': error,
-        })
+        if error:
+            # Only return an error if we have NO results at all
+            if not songs:
+                return jsonify({
+                    'songs': [],
+                    'source': 'external_unavailable',
+                    'message': error,
+                }), 503
+        else:
+            # Combine and de-duplicate
+            existing_ids = {s['youtube_id'] for s in songs}
+            for r in yt_results:
+                if r['youtube_id'] not in existing_ids:
+                    songs.append(r)
+            source = 'database_and_youtube'
 
-    # Save to DB and return
-    songs = []
-    for r in results:
-        song = get_or_create_song(
-            youtube_id=r['youtube_id'],
-            title=r['title'],
-            artist=r['artist'],
-            duration=r['duration'],
-            thumbnail_url=r['thumbnail_url'],
-        )
-        songs.append(song)
-
-    return jsonify({'songs': songs, 'source': 'youtube'})
+    return jsonify({'songs': songs, 'source': source})
 
 
 # ── SEARCH USERS ──────────────────────────────────
@@ -82,8 +81,8 @@ def search_users_route():
     if not query:
         return jsonify({'users': []})
 
-    rows = query_db(
-        """SELECT u.id, u.userid, u.name,
+    rows = query_pg(
+        """SELECT u.id, u.username AS userid, u.name,
                   u.rank_badge, p.avatar_url,
                   p.is_private,
                   CASE WHEN f.status = 'accepted'
@@ -93,20 +92,20 @@ def search_users_route():
            FROM users u
            LEFT JOIN profiles p ON u.id = p.user_id
            LEFT JOIN follows f ON (
-               f.follower_id = ? AND f.following_id = u.id
+               f.follower_id = %s AND f.following_id = u.id
            )
-           WHERE u.id != ?
+           WHERE u.id != %s
            AND (
-               u.userid LIKE ?
-               OR u.name LIKE ?
+               u.username ILIKE %s
+               OR u.name ILIKE %s
            )
-           AND u.is_active = 1
+           AND u.is_active = true
            LIMIT 20""",
         (user['id'], user['id'],
          f'%{query}%', f'%{query}%')
     )
 
-    return jsonify({'users': rows_to_list(rows)})
+    return jsonify({'users': rows or []})
 
 
 # ── SEARCH HISTORY ────────────────────────────────
@@ -123,7 +122,7 @@ def get_history(search_type):
     return jsonify({'history': history})
 
 
-@search_bp.route('/history/<int:history_id>',
+@search_bp.route('/history/<history_id>',
                  methods=['DELETE'])
 def remove_history_item(history_id):
     user, err, code = require_auth()

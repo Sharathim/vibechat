@@ -1,14 +1,27 @@
 export interface Song {
-  id: number
-  youtubeId?: string
-  youtube_id?: string
+  // Main identifier
+  youtubeId: string
+
+  // Core metadata
   title: string
   artist: string
+  duration: number // in seconds
   thumbnailUrl: string
-  thumbnail_url?: string
-  audioUrl: string | null
+
+  // Optional metadata from YouTube
+  youtubeLikeCount?: number
+  tags?: string[]
+
+  // Vibechat-specific metadata
+  vibechatLikeCount?: number
+  listenedCount?: number
+
+  // Fields from the old schema that might still appear
+  // in some contexts until the migration is fully complete.
+  // Should be treated as deprecated.
+  id?: number
   s3_audio_url?: string | null
-  duration: number
+  audioUrl?: string | null
 }
 
 export interface Playlist {

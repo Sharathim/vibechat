@@ -1,19 +1,7 @@
 import { createContext, useContext, useState, useRef, useEffect } from 'react'
 import musicApi from '../api/music'
 import { API_BASE_URL } from '../config'
-
-interface Song {
-  id: number
-  youtubeId?: string
-  youtube_id?: string
-  title: string
-  artist: string
-  thumbnailUrl: string
-  thumbnail_url?: string
-  audioUrl: string | null
-  s3_audio_url?: string | null
-  duration: number
-}
+import type { Song } from '../types/song'
 
 interface MusicContextType {
   currentSong: Song | null
@@ -41,20 +29,24 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     audioRef.current = new Audio()
 
-    audioRef.current.addEventListener('ended', () => {
-      skipToNext()
-    })
-
-    audioRef.current.addEventListener('timeupdate', () => {
+    const handleEnded = () => skipToNext()
+    const handleTimeUpdate = () => {
       const audio = audioRef.current
       if (audio && audio.duration) {
         setProgressState((audio.currentTime / audio.duration) * 100)
       }
-    })
+    }
+
+    audioRef.current.addEventListener('ended', handleEnded)
+    audioRef.current.addEventListener('timeupdate', handleTimeUpdate)
 
     return () => {
-      audioRef.current?.pause()
-      audioRef.current = null
+      const audio = audioRef.current
+      if (audio) {
+        audio.pause()
+        audio.removeEventListener('ended', handleEnded)
+        audio.removeEventListener('timeupdate', handleTimeUpdate)
+      }
     }
   }, [])
 
@@ -63,20 +55,19 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     if (!audio) return
 
     try {
-      // Build stream URL through our backend proxy
-      const youtubeId = song.youtubeId || song.id.toString()
-      const streamUrl = `${API_BASE_URL}/api/music/stream/${youtubeId}`
+      // Stream URL uses the song's YouTube ID
+      const streamUrl = `${API_BASE_URL}/api/music/stream/${song.youtubeId}`
 
       audio.src = streamUrl
       audio.load()
       await audio.play()
       setIsPlaying(true)
 
-      // Log to history
+      // Log to history using youtubeId
       try {
-        await musicApi.logPlay(song.id)
+        await musicApi.logPlay(song.youtubeId)
       } catch (e) {
-        // Non-critical
+        console.warn('Failed to log play history:', e)
       }
     } catch (err) {
       console.error('Playback error:', err)
@@ -103,6 +94,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
   const skipToNext = () => {
     if (queue.length === 0) {
       setIsPlaying(false)
+      setCurrentSong(null)
       return
     }
     const [next, ...rest] = queue

@@ -1,84 +1,77 @@
-from database.db import execute_db, query_db, row_to_dict, rows_to_list
+from database.pg_db import execute_pg, query_pg
 
-def get_or_create_song(youtube_id, title, artist,
-                        duration, thumbnail_url,
-                        audio_url=None):
-    existing = query_db(
-        "SELECT * FROM songs WHERE youtube_id = ?",
-        (youtube_id,), one=True
+def get_or_create_song_pg(youtube_id, title, artist,
+                          duration, thumbnail_url, tags=None,
+                          youtube_like_count=None):
+    """
+    Insert a song into PostgreSQL if it doesn't exist.
+    Uses ON CONFLICT DO NOTHING.
+    """
+    sql = """
+        INSERT INTO songs (youtube_id, title, artist, duration, thumbnail_url, tags, youtube_like_count)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (youtube_id) DO NOTHING
+        RETURNING *
+    """
+    song = execute_pg(
+        sql,
+        (youtube_id, title, artist, duration, thumbnail_url, tags, youtube_like_count),
+        fetch='one'
     )
+    if song:
+        return song
 
-    if existing:
-        return row_to_dict(existing)
-
-    song_id = execute_db(
-        """INSERT INTO songs
-           (youtube_id, title, artist, duration,
-            thumbnail_url, s3_audio_url)
-           VALUES (?, ?, ?, ?, ?, ?)""",
-        (youtube_id, title, artist, duration,
-         thumbnail_url, audio_url)
+    # If insertion was skipped, fetch the existing song
+    return query_pg(
+        "SELECT * FROM songs WHERE youtube_id = %s",
+        (youtube_id,),
+        one=True
     )
-
-    return {
-        'id': song_id,
-        'youtube_id': youtube_id,
-        'title': title,
-        'artist': artist,
-        'duration': duration,
-        'thumbnail_url': thumbnail_url,
-        's3_audio_url': audio_url,
-    }
-
 
 def get_liked_songs(user_id):
-    rows = query_db(
+    """Fetches liked songs for a user from PostgreSQL."""
+    rows = query_pg(
         """SELECT s.*, ls.liked_at
            FROM liked_songs ls
-           JOIN songs s ON ls.song_id = s.id
-           WHERE ls.user_id = ?
+           JOIN songs s ON ls.song_youtube_id = s.youtube_id
+           WHERE ls.user_id = %s
            ORDER BY ls.liked_at DESC""",
         (user_id,)
     )
-    return rows_to_list(rows)
+    return rows or []
 
-
-def get_downloads(user_id):
-    rows = query_db(
-        """SELECT s.*, d.downloaded_at
-           FROM downloads d
-           JOIN songs s ON d.song_id = s.id
-           WHERE d.user_id = ?
-           ORDER BY d.downloaded_at DESC""",
-        (user_id,)
-    )
-    return rows_to_list(rows)
-
-
-def get_listening_history(user_id, limit=50):
-    rows = query_db(
-        """SELECT s.*, lh.played_at, lh.id as history_id
-           FROM listening_history lh
-           JOIN songs s ON lh.song_id = s.id
-           WHERE lh.user_id = ?
-           ORDER BY lh.played_at DESC
-           LIMIT ?""",
+def get_listening_history(user_id, limit=20):
+    """Fetches listening history for a user from PostgreSQL."""
+    rows = query_pg(
+        """SELECT h.id, h.played_at, s.*
+           FROM listening_history h
+           JOIN songs s ON h.song_youtube_id = s.youtube_id
+           WHERE h.user_id = %s
+           ORDER BY h.played_at DESC
+           LIMIT %s""",
         (user_id, limit)
     )
-    return rows_to_list(rows)
+    return rows or []
 
+def log_play(user_id, youtube_id):
+    """
+    Logs a song play event.
+    1. Inserts into listening_history.
+    2. Increments listened_count on the songs table.
+    """
+    # Ensure song exists before logging
+    song = query_pg("SELECT 1 FROM songs WHERE youtube_id = %s", (youtube_id,), one=True)
+    if not song:
+        # In a real-world scenario, you might fetch info from YouTube here
+        # For now, we'll just skip if the song isn't in our DB
+        print(f"Skipping play log for unknown song: {youtube_id}")
+        return
 
-def log_play(user_id, song_id):
-    execute_db(
-        """INSERT INTO listening_history (user_id, song_id)
-           VALUES (?, ?)""",
-        (user_id, song_id)
+    execute_pg(
+        "INSERT INTO listening_history (user_id, song_youtube_id) VALUES (%s, %s)",
+        (user_id, youtube_id)
     )
-
-    # Also add to feed activity
-    execute_db(
-        """INSERT OR IGNORE INTO feed_activity
-           (user_id, song_id, activity_type)
-           VALUES (?, ?, 'listen')""",
-        (user_id, song_id)
+    execute_pg(
+        "UPDATE songs SET listened_count = listened_count + 1 WHERE youtube_id = %s",
+        (youtube_id,)
     )
