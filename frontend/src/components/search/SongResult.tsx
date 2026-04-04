@@ -2,6 +2,7 @@ import { Play, Heart } from 'lucide-react'
 import type { Song } from '../../types/song'
 import { formatDuration } from '../../lib/utils'
 import { useMusic } from '../../context/MusicContext'
+import searchApi from '../../api/search'
 
 interface SongResultProps {
   song: Song
@@ -16,10 +17,19 @@ export default function SongResult({
 }: SongResultProps) {
   const { play } = useMusic()
 
-  const handlePlay = () => {
+  const handlePlay = async () => {
+    const youtubeId = (song as any).youtube_id || song.youtubeId || ''
+    if (youtubeId) {
+      try {
+        await searchApi.selectSong(youtubeId)
+      } catch {
+        // Playback should continue even if metadata ingestion fails.
+      }
+    }
+
     play({
       id: song.id,
-      youtubeId: (song as any).youtube_id || song.youtubeId || '',
+      youtubeId,
       title: song.title,
       artist: song.artist,
       thumbnailUrl: (song as any).thumbnail_url || song.thumbnailUrl || '',

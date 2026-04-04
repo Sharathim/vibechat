@@ -76,9 +76,10 @@ def get_song_info(youtube_id):
                 'youtube_id': youtube_id,
                 'title': info.get('title', 'Unknown'),
                 'artist': info.get('uploader', 'Unknown'),
+                'tags': info.get('tags') or [],
+                'youtube_like_count': int(info.get('like_count') or 0),
                 'duration': duration,
                 'thumbnail_url': thumbnail_url,
-                'audio_url': info.get('url', ''),
             }
 
     except Exception as e:

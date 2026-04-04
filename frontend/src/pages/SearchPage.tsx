@@ -10,8 +10,25 @@ import { useMusic } from '../context/MusicContext'
 import searchApi from '../api/search'
 import usersApi from '../api/users'
 
+const toStableSongId = (raw: any): number => {
+  if (typeof raw.id === 'number' && Number.isFinite(raw.id)) {
+    return raw.id
+  }
+
+  const source = String(raw.youtube_id || raw.youtubeId || '')
+  if (!source) return Date.now()
+
+  let hash = 0
+  for (let i = 0; i < source.length; i += 1) {
+    hash = ((hash << 5) - hash) + source.charCodeAt(i)
+    hash |= 0
+  }
+
+  return Math.abs(hash) || Date.now()
+}
+
 const mapSong = (song: any): Song => ({
-  id: song.id,
+  id: toStableSongId(song),
   youtubeId: song.youtube_id,
   youtube_id: song.youtube_id,
   title: song.title,
@@ -157,15 +174,29 @@ export default function SearchPage() {
 
   const handleHistorySelect = (item: HistoryItem) => {
     if (item.type === 'song') {
-      play({
-        id: item.song.id,
-        youtubeId: (item.song as any).youtube_id || item.song.youtubeId || '',
-        title: item.song.title,
-        artist: item.song.artist,
-        thumbnailUrl: (item.song as any).thumbnail_url || item.song.thumbnailUrl || '',
-        audioUrl: (item.song as any).s3_audio_url || item.song.audioUrl || null,
-        duration: item.song.duration,
-      })
+      const youtubeId = (item.song as any).youtube_id || item.song.youtubeId || ''
+      const playSong = () => {
+        play({
+          id: item.song.id,
+          youtubeId,
+          title: item.song.title,
+          artist: item.song.artist,
+          thumbnailUrl: (item.song as any).thumbnail_url || item.song.thumbnailUrl || '',
+          audioUrl: (item.song as any).s3_audio_url || item.song.audioUrl || null,
+          duration: item.song.duration,
+        })
+      }
+
+      if (!youtubeId) {
+        playSong()
+        return
+      }
+
+      searchApi.selectSong(youtubeId)
+        .catch(() => {
+          // Playback should continue even if metadata ingestion fails.
+        })
+        .finally(playSong)
     }
   }
 
