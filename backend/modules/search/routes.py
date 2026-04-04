@@ -6,6 +6,7 @@ from .helpers import (
 from modules.music.youtube_api import search_songs
 from modules.auth.helpers import get_current_user
 from database.pg_db import query_pg
+from database.db import query_db, rows_to_list
 
 search_bp = Blueprint('search', __name__)
 
@@ -30,28 +31,32 @@ def _search_db_songs(query, limit=10):
     if not terms:
         return []
 
-    return query_pg(
-        """SELECT
-               youtube_id,
-               title,
-               thumbnail_url,
-               tags,
-               youtube_like_count,
-               vibechat_like_count,
-               duration,
-               listened_count,
-               created_at
-           FROM songs
-           WHERE title ILIKE %s
-              OR EXISTS (
-                  SELECT 1
-                  FROM unnest(COALESCE(tags, ARRAY[]::text[])) AS tag
-                  WHERE LOWER(tag) = ANY(%s)
-              )
-           ORDER BY listened_count DESC, youtube_like_count DESC, title ASC
-           LIMIT %s""",
-        (f'%{query}%', terms, limit)
-    )
+    try:
+        return query_pg(
+            """SELECT
+                   youtube_id,
+                   title,
+                   thumbnail_url,
+                   tags,
+                   youtube_like_count,
+                   vibechat_like_count,
+                   duration,
+                   listened_count,
+                   created_at
+               FROM songs
+               WHERE title ILIKE %s
+                  OR EXISTS (
+                      SELECT 1
+                      FROM unnest(COALESCE(tags, ARRAY[]::text[])) AS tag
+                      WHERE LOWER(tag) = ANY(%s)
+                  )
+               ORDER BY listened_count DESC, youtube_like_count DESC, title ASC
+               LIMIT %s""",
+            (f'%{query}%', terms, limit)
+        )
+    except Exception:
+        # If PostgreSQL is unavailable, fall back to YouTube-only search.
+        return []
 
 
 def _merge_search_results(db_results, youtube_results):
