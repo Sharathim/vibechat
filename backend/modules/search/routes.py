@@ -1,17 +1,12 @@
 from flask import Blueprint, request, jsonify, session
-from datetime import datetime, timezone
-from typing import List, Dict
-import json
-import boto3
 from .helpers import (
     get_search_history, add_search_history,
     remove_search_history_item, clear_search_history
 )
 from modules.music.youtube_api import search_songs
-from modules.music.ytdlp import get_song_info
+from modules.music.helpers import get_or_create_song
 from modules.auth.helpers import get_current_user
 from database.db import query_db, rows_to_list
-from database.pg_db import query_pg, execute_pg
 from config import Config
 
 search_bp = Blueprint('search', __name__)
@@ -23,89 +18,6 @@ def require_auth():
     return user, None, None
 
 
-def _normalize_song_row(row: Dict):
-    return {
-        'youtube_id': row.get('youtube_id'),
-        'title': row.get('title') or 'Unknown title',
-        'thumbnail_url': row.get('thumbnail_url') or '',
-        'tags': row.get('tags') or [],
-        'youtube_like_count': int(row.get('youtube_like_count') or 0),
-        'vibechat_like_count': int(row.get('vibechat_like_count') or 0),
-        'duration': int(row.get('duration') or 0),
-        'listened_count': int(row.get('listened_count') or 0),
-    }
-
-
-def _find_songs_in_pg(query_text: str, limit: int) -> List[Dict]:
-    pattern = f"%{query_text}%"
-    rows = query_pg(
-        """SELECT youtube_id, title, thumbnail_url, tags,
-                  youtube_like_count, vibechat_like_count,
-                  duration, listened_count
-           FROM songs
-           WHERE title ILIKE %s
-              OR EXISTS (
-                  SELECT 1 FROM unnest(tags) AS tag
-                  WHERE tag ILIKE %s
-              )
-           ORDER BY listened_count DESC, youtube_like_count DESC
-           LIMIT %s""",
-        (pattern, pattern, limit),
-    )
-    return [_normalize_song_row(r) for r in rows]
-
-
-def _upsert_song_metadata(song: Dict):
-    execute_pg(
-        """INSERT INTO songs
-           (youtube_id, title, thumbnail_url, tags,
-            youtube_like_count, duration)
-           VALUES (%s, %s, %s, %s, %s, %s)
-           ON CONFLICT (youtube_id) DO NOTHING""",
-        (
-            song.get('youtube_id'),
-            song.get('title') or 'Unknown title',
-            song.get('thumbnail_url') or '',
-            song.get('tags') or [],
-            int(song.get('youtube_like_count') or 0),
-            int(song.get('duration') or 0),
-        ),
-    )
-
-
-def _backup_songs_to_s3():
-    if not Config.AWS_ACCESS_KEY_ID or not Config.AWS_SECRET_ACCESS_KEY or not Config.AWS_BUCKET_NAME:
-        return
-
-    rows = query_pg(
-        """SELECT youtube_id, title, thumbnail_url, tags,
-                  youtube_like_count, vibechat_like_count,
-                  duration, listened_count, created_at
-           FROM songs
-           ORDER BY created_at DESC"""
-    )
-
-    payload = {
-        'generated_at': datetime.now(timezone.utc).isoformat(),
-        'count': len(rows),
-        'songs': rows,
-    }
-
-    s3 = boto3.client(
-        's3',
-        aws_access_key_id=Config.AWS_ACCESS_KEY_ID,
-        aws_secret_access_key=Config.AWS_SECRET_ACCESS_KEY,
-        region_name=Config.AWS_REGION,
-    )
-
-    s3.put_object(
-        Bucket=Config.AWS_BUCKET_NAME,
-        Key='backups/postgres/songs-latest.json',
-        Body=json.dumps(payload, default=str).encode('utf-8'),
-        ContentType='application/json',
-    )
-
-
 # ── SEARCH SONGS ──────────────────────────────────
 @search_bp.route('/songs', methods=['GET'])
 def search_songs_route():
@@ -115,78 +27,48 @@ def search_songs_route():
 
     query = request.args.get('q', '').strip()
     if not query:
-        return jsonify({'songs': [], 'source': 'database'})
+        return jsonify({'songs': []})
 
-    target_count = 10
-    db_songs = _find_songs_in_pg(query, target_count)
+    # Search in DB first
+    db_results = query_db(
+        """SELECT * FROM songs
+           WHERE title LIKE ? OR artist LIKE ?
+           LIMIT 20""",
+        (f'%{query}%', f'%{query}%')
+    )
 
-    if len(db_songs) >= target_count:
-        return jsonify({'songs': db_songs[:target_count], 'source': 'database'})
+    if db_results:
+        songs = rows_to_list(db_results)
+        return jsonify({'songs': songs, 'source': 'database'})
 
-    needed = target_count - len(db_songs)
-    yt_results, error = search_songs(query, max_results=needed)
+    if not Config.YOUTUBE_API_KEY:
+        return jsonify({
+            'songs': [],
+            'message': 'YouTube API not configured'
+        })
+
+    # Fallback to YouTube API
+    results, error = search_songs(query)
     if error:
         return jsonify({
-            'songs': db_songs,
-            'source': 'mixed' if db_songs else 'external_unavailable',
+            'songs': [],
+            'source': 'external_unavailable',
             'message': error,
         })
 
-    seen_ids = {s['youtube_id'] for s in db_songs}
-    yt_songs = []
-    for item in yt_results:
-        youtube_id = item.get('youtube_id')
-        if not youtube_id or youtube_id in seen_ids:
-            continue
-        yt_songs.append({
-            'youtube_id': youtube_id,
-            'title': item.get('title') or 'Unknown title',
-            'thumbnail_url': item.get('thumbnail_url') or '',
-            'tags': item.get('tags') or [],
-            'youtube_like_count': int(item.get('youtube_like_count') or 0),
-            'vibechat_like_count': 0,
-            'duration': int(item.get('duration') or 0),
-            'listened_count': 0,
-        })
-        seen_ids.add(youtube_id)
+    # Save to DB and return
+    songs = []
+    for r in results:
+        song = get_or_create_song(
+            youtube_id=r['youtube_id'],
+            title=r['title'],
+            artist=r['artist'],
+            duration=r['duration'],
+            thumbnail_url=r['thumbnail_url'],
+        )
+        songs.append(song)
 
-    merged = (db_songs + yt_songs)[:target_count]
-    source = 'youtube' if not db_songs else 'mixed'
-    return jsonify({'songs': merged, 'source': source})
-
-
-@search_bp.route('/songs/select', methods=['POST'])
-def select_song_route():
-    user, err, code = require_auth()
-    if err:
-        return err, code
-
-    data = request.get_json(silent=True) or {}
-    youtube_id = (data.get('youtube_id') or '').strip()
-
-    if not youtube_id:
-        return jsonify({'error': 'youtube_id required'}), 400
-
-    info = get_song_info(youtube_id)
-    if not info:
-        return jsonify({'error': 'Could not fetch song metadata'}), 400
-
-    song = {
-        'youtube_id': youtube_id,
-        'title': info.get('title') or 'Unknown title',
-        'thumbnail_url': info.get('thumbnail_url') or '',
-        'tags': info.get('tags') or [],
-        'youtube_like_count': int(info.get('youtube_like_count') or 0),
-        'duration': int(info.get('duration') or 0),
-    }
-
-    _upsert_song_metadata(song)
-    try:
-        _backup_songs_to_s3()
-    except Exception as e:
-        print(f"S3 backup warning: {e}")
-
-    return jsonify({'success': True, 'song': _normalize_song_row(song)})
+    return jsonify({'songs': songs, 'source': 'youtube'})
 
 
 # ── SEARCH USERS ──────────────────────────────────

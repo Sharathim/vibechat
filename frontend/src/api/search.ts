@@ -4,9 +4,6 @@ export const searchApi = {
   searchSongs: (query: string) =>
     client.get('/api/search/songs', { params: { q: query } }),
 
-  selectSong: (youtubeId: string) =>
-    client.post('/api/search/songs/select', { youtube_id: youtubeId }),
-
   searchUsers: (query: string) =>
     client.get('/api/search/users', { params: { q: query } }),
 

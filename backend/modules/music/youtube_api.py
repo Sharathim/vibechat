@@ -138,8 +138,6 @@ def search_songs(query, max_results=10):
                 'title': snippet['title'],
                 'artist': snippet['channelTitle'],
                 'thumbnail_url': thumbnail,
-                'tags': detail.get('tags', []),
-                'youtube_like_count': int(detail.get('youtube_like_count', 0)),
                 'duration': duration,
             })
 
@@ -163,7 +161,7 @@ def get_video_details(video_ids):
 
     try:
         params = {
-            'part': 'contentDetails,snippet,statistics',
+            'part': 'contentDetails,snippet',
             'id': ','.join(video_ids),
             'key': Config.YOUTUBE_API_KEY,
         }
@@ -179,8 +177,6 @@ def get_video_details(video_ids):
                 'duration': duration,
                 'title': item['snippet']['title'],
                 'channel': item['snippet']['channelTitle'],
-                'tags': item['snippet'].get('tags', []),
-                'youtube_like_count': int(item.get('statistics', {}).get('likeCount', 0) or 0),
             })
 
         return results
