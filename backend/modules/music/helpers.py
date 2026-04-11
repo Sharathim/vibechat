@@ -35,14 +35,9 @@ def ensure_song_record(youtube_id, title, artist=None,
                tags = COALESCE(EXCLUDED.tags, songs.tags),
                youtube_like_count = COALESCE(EXCLUDED.youtube_like_count, songs.youtube_like_count)""",
         (
-            youtube_id,
-            title,
-            normalized_artist,
-            int(duration or 0),
-            thumbnail_url,
-            None,
-            normalized_tags,
-            int(youtube_like_count or 0),
+            youtube_id, title, normalized_artist,
+            int(duration or 0), thumbnail_url, None,
+            normalized_tags, int(youtube_like_count or 0),
         )
     )
 
@@ -50,7 +45,6 @@ def ensure_song_record(youtube_id, title, artist=None,
         "SELECT * FROM songs WHERE youtube_id = %s",
         (youtube_id,), one=True
     )
-
     return row_to_dict(pg_song)
 
 
@@ -58,13 +52,9 @@ def get_or_create_song(youtube_id, title, artist=None,
                        duration=0, thumbnail_url='',
                        youtube_like_count=0, tags=None):
     return ensure_song_record(
-        youtube_id=youtube_id,
-        title=title,
-        artist=artist,
-        duration=duration,
-        thumbnail_url=thumbnail_url,
-        youtube_like_count=youtube_like_count,
-        tags=tags,
+        youtube_id=youtube_id, title=title, artist=artist,
+        duration=duration, thumbnail_url=thumbnail_url,
+        youtube_like_count=youtube_like_count, tags=tags,
     )
 
 
@@ -73,7 +63,7 @@ def get_liked_songs(user_id):
         """SELECT s.*, ls.liked_at
            FROM liked_songs ls
            JOIN songs s ON ls.song_id = s.id
-           WHERE ls.user_id = ?
+           WHERE ls.user_id = %s
            ORDER BY ls.liked_at DESC""",
         (user_id,)
     )
@@ -85,7 +75,7 @@ def get_downloads(user_id):
         """SELECT s.*, d.downloaded_at
            FROM downloads d
            JOIN songs s ON d.song_id = s.id
-           WHERE d.user_id = ?
+           WHERE d.user_id = %s
            ORDER BY d.downloaded_at DESC""",
         (user_id,)
     )
@@ -97,9 +87,9 @@ def get_listening_history(user_id, limit=50):
         """SELECT s.*, lh.played_at, lh.id as history_id
            FROM listening_history lh
            JOIN songs s ON lh.song_id = s.id
-           WHERE lh.user_id = ?
+           WHERE lh.user_id = %s
            ORDER BY lh.played_at DESC
-           LIMIT ?""",
+           LIMIT %s""",
         (user_id, limit)
     )
     return rows_to_list(rows)
@@ -108,14 +98,12 @@ def get_listening_history(user_id, limit=50):
 def log_play(user_id, song_id):
     execute_pg(
         """INSERT INTO listening_history (user_id, song_id)
-           VALUES (?, ?)""",
+           VALUES (%s, %s)""",
         (user_id, song_id)
     )
-
-    # Also add to feed activity
     execute_pg(
-        """INSERT OR IGNORE INTO feed_activity
-           (user_id, song_id, activity_type)
-           VALUES (?, ?, 'listen')""",
+        """INSERT INTO feed_activity (user_id, song_id, activity_type)
+           VALUES (%s, %s, 'listen')
+           ON CONFLICT DO NOTHING""",
         (user_id, song_id)
     )

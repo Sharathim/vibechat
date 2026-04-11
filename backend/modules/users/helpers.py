@@ -23,8 +23,9 @@ def get_user_profile(userid, current_user_id=None):
                vs.host_user_id = u.id
                AND vs.status = 'ended'
            )
-           WHERE u.userid = ? AND u.is_active = 1
-           GROUP BY u.id""",
+           WHERE u.userid = %s AND u.is_active = TRUE
+           GROUP BY u.id, p.bio, p.avatar_url, p.is_private,
+                    p.show_rank_badge, p.show_online_status""",
         (userid,), one=True
     )
 
@@ -33,27 +34,22 @@ def get_user_profile(userid, current_user_id=None):
 
     profile = row_to_dict(user)
 
-    # Add follow status if current user provided
     if current_user_id:
         follow = query_db(
             """SELECT status FROM follows
-               WHERE follower_id = ? AND following_id = ?""",
+               WHERE follower_id = %s AND following_id = %s""",
             (current_user_id, profile['id']), one=True
         )
-        if follow:
-            profile['follow_status'] = follow['status']
-        else:
-            profile['follow_status'] = 'none'
+        profile['follow_status'] = follow['status'] if follow else 'none'
 
-        # Mutual followers
         mutuals = query_db(
             """SELECT u.id, u.name, u.userid, p.avatar_url
                FROM follows f1
                JOIN follows f2 ON f1.follower_id = f2.follower_id
                JOIN users u ON f1.follower_id = u.id
                LEFT JOIN profiles p ON u.id = p.user_id
-               WHERE f1.following_id = ?
-               AND f2.following_id = ?
+               WHERE f1.following_id = %s
+               AND f2.following_id = %s
                AND f1.status = 'accepted'
                AND f2.status = 'accepted'
                LIMIT 3""",
@@ -71,10 +67,10 @@ def get_followers(user_id, limit=50, offset=0):
            FROM follows f
            JOIN users u ON f.follower_id = u.id
            LEFT JOIN profiles p ON u.id = p.user_id
-           WHERE f.following_id = ?
+           WHERE f.following_id = %s
            AND f.status = 'accepted'
            ORDER BY f.created_at DESC
-           LIMIT ? OFFSET ?""",
+           LIMIT %s OFFSET %s""",
         (user_id, limit, offset)
     )
     return rows_to_list(rows)
@@ -87,10 +83,10 @@ def get_following(user_id, limit=50, offset=0):
            FROM follows f
            JOIN users u ON f.following_id = u.id
            LEFT JOIN profiles p ON u.id = p.user_id
-           WHERE f.follower_id = ?
+           WHERE f.follower_id = %s
            AND f.status = 'accepted'
            ORDER BY f.created_at DESC
-           LIMIT ? OFFSET ?""",
+           LIMIT %s OFFSET %s""",
         (user_id, limit, offset)
     )
     return rows_to_list(rows)
@@ -105,7 +101,7 @@ def get_follow_requests(user_id):
            FROM follows f
            JOIN users u ON f.follower_id = u.id
            LEFT JOIN profiles p ON u.id = p.user_id
-           WHERE f.following_id = ?
+           WHERE f.following_id = %s
            AND f.status = 'pending'
            ORDER BY f.created_at DESC""",
         (user_id,)
