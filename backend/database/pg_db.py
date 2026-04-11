@@ -68,6 +68,7 @@ def init_pg_db():
         raise
     finally:
         release_pg_conn(conn)
+    run_migrations()
 
 
 def query_pg(query, args=(), one=False):
@@ -105,6 +106,34 @@ def execute_pg(query, args=()):
             return cur.rowcount
     except Exception:
         conn.rollback()
+        raise
+    finally:
+        release_pg_conn(conn)
+
+def run_migrations():
+    """
+    Apply schema migrations safely.
+    Uses IF NOT EXISTS so migrations are safe to run multiple times.
+    """
+    migrations = [
+        # Add userid column if missing (migration 001)
+        """
+        ALTER TABLE users 
+        ADD COLUMN IF NOT EXISTS userid VARCHAR(20) UNIQUE;
+        """,
+        # Add any future column changes below as new strings
+    ]
+
+    conn = get_pg_conn()
+    try:
+        cur = conn.cursor()
+        for migration in migrations:
+            cur.execute(migration)
+        conn.commit()
+        print("✅ Migrations applied successfully")
+    except Exception as e:
+        conn.rollback()
+        print(f"❌ Migration error: {e}")
         raise
     finally:
         release_pg_conn(conn)
