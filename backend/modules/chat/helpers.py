@@ -2,13 +2,12 @@ from database.pg_db import execute_db, query_db, row_to_dict, rows_to_list
 from datetime import datetime
 
 def get_or_create_conversation(user1_id, user2_id):
-    # Always store with smaller id first
     uid1 = min(user1_id, user2_id)
     uid2 = max(user1_id, user2_id)
 
     conv = query_db(
         """SELECT * FROM conversations
-           WHERE user1_id = ? AND user2_id = ?""",
+           WHERE user1_id = %s AND user2_id = %s""",
         (uid1, uid2), one=True
     )
 
@@ -17,7 +16,8 @@ def get_or_create_conversation(user1_id, user2_id):
 
     conv_id = execute_db(
         """INSERT INTO conversations (user1_id, user2_id)
-           VALUES (?, ?)""",
+           VALUES (%s, %s)
+           RETURNING id""",
         (uid1, uid2)
     )
 
@@ -29,7 +29,7 @@ def get_conversations(user_id):
              c.id,
              c.last_message_at,
              CASE
-               WHEN c.user1_id = ? THEN c.user2_id
+               WHEN c.user1_id = %s THEN c.user2_id
                ELSE c.user1_id
              END as other_user_id,
              u.userid, u.name,
@@ -43,15 +43,15 @@ def get_conversations(user_id):
               ORDER BY created_at DESC LIMIT 1) as last_message_type,
              (SELECT COUNT(*) FROM messages
               WHERE conversation_id = c.id
-              AND sender_id != ?
-              AND is_read = 0) as unread_count
+              AND sender_id != %s
+              AND is_read = FALSE) as unread_count
            FROM conversations c
            JOIN users u ON u.id = (
-               CASE WHEN c.user1_id = ? THEN c.user2_id
+               CASE WHEN c.user1_id = %s THEN c.user2_id
                ELSE c.user1_id END
            )
            LEFT JOIN profiles p ON u.id = p.user_id
-           WHERE c.user1_id = ? OR c.user2_id = ?
+           WHERE c.user1_id = %s OR c.user2_id = %s
            ORDER BY c.last_message_at DESC NULLS LAST""",
         (user_id, user_id, user_id, user_id, user_id)
     )
@@ -66,9 +66,9 @@ def get_messages(conversation_id, limit=50, offset=0):
            FROM messages m
            JOIN users u ON m.sender_id = u.id
            LEFT JOIN profiles p ON u.id = p.user_id
-           WHERE m.conversation_id = ?
+           WHERE m.conversation_id = %s
            ORDER BY m.created_at ASC
-           LIMIT ? OFFSET ?""",
+           LIMIT %s OFFSET %s""",
         (conversation_id, limit, offset)
     )
     return rows_to_list(rows)
@@ -78,14 +78,15 @@ def send_message(conversation_id, sender_id,
     msg_id = execute_db(
         """INSERT INTO messages
            (conversation_id, sender_id, type, content)
-           VALUES (?, ?, ?, ?)""",
+           VALUES (%s, %s, %s, %s)
+           RETURNING id""",
         (conversation_id, sender_id, message_type, content)
     )
 
     execute_db(
         """UPDATE conversations
            SET last_message_at = CURRENT_TIMESTAMP
-           WHERE id = ?""",
+           WHERE id = %s""",
         (conversation_id,)
     )
 
@@ -97,7 +98,7 @@ def send_message(conversation_id, sender_id,
            FROM messages m
            JOIN users u ON m.sender_id = u.id
            LEFT JOIN profiles p ON u.id = p.user_id
-           WHERE m.id = ?""",
+           WHERE m.id = %s""",
         (msg_id,), one=True
     )
     return row_to_dict(msg)
@@ -105,9 +106,9 @@ def send_message(conversation_id, sender_id,
 def mark_messages_read(conversation_id, user_id):
     execute_db(
         """UPDATE messages
-           SET is_read = 1
-           WHERE conversation_id = ?
-           AND sender_id != ?
-           AND is_read = 0""",
+           SET is_read = TRUE
+           WHERE conversation_id = %s
+           AND sender_id != %s
+           AND is_read = FALSE""",
         (conversation_id, user_id)
     )
