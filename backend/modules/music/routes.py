@@ -24,21 +24,12 @@ def proxy_thumbnail():
     if not url:
         return '', 404
     try:
-        response = req.get(url, timeout=5, headers={
-            'User-Agent': 'Mozilla/5.0'
-        })
-        from flask import Response
-        return Response(
-            response.content,
-            content_type=response.headers.get(
-                'content-type', 'image/jpeg'
-            )
-        )
+        response = req.get(url, timeout=5, headers={'User-Agent': 'Mozilla/5.0'})
+        return Response(response.content, content_type=response.headers.get('content-type', 'image/jpeg'))
     except Exception:
         return '', 404
 
 
-# ── STREAM SONG ───────────────────────────────────
 @music_bp.route('/stream/<youtube_id>')
 def stream_song(youtube_id):
     user, err, code = require_auth()
@@ -62,11 +53,9 @@ def stream_song(youtube_id):
                 tags=metadata.get('tags', []),
             )
 
-    # Check DB for cached S3 URL first
     song = query_pg(
-        """SELECT * FROM songs 
-           WHERE youtube_id = ? OR CAST(id AS TEXT) = ?""",
-        (youtube_id, youtube_id), one=True
+        "SELECT * FROM songs WHERE youtube_id = %s",
+        (youtube_id,), one=True
     )
 
     if song:
@@ -77,43 +66,23 @@ def stream_song(youtube_id):
     else:
         yt_id = youtube_id
 
-    # Get direct URL via yt-dlp
-    from .ytdlp import get_audio_url
     audio_url, error = get_audio_url(yt_id)
-
     if error:
         return jsonify({'error': error}), 400
 
-    # Proxy the audio stream through Flask
-    # This bypasses CORS restrictions
     def generate():
         try:
-            headers = {
-                'User-Agent': 'Mozilla/5.0',
-                'Referer': 'https://www.youtube.com/',
-            }
-            with req.get(
-                audio_url,
-                stream=True,
-                headers=headers,
-                timeout=30
-            ) as r:
+            headers = {'User-Agent': 'Mozilla/5.0', 'Referer': 'https://www.youtube.com/'}
+            with req.get(audio_url, stream=True, headers=headers, timeout=30) as r:
                 for chunk in r.iter_content(chunk_size=8192):
                     if chunk:
                         yield chunk
         except Exception as e:
             print(f"Stream error: {e}")
 
-    # Get content type
     try:
-        head = req.head(
-            audio_url,
-            headers={'User-Agent': 'Mozilla/5.0'},
-            timeout=5
-        )
-        content_type = head.headers.get(
-            'content-type', 'audio/webm'
-        )
+        head = req.head(audio_url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=5)
+        content_type = head.headers.get('content-type', 'audio/webm')
     except Exception:
         content_type = 'audio/webm'
 
@@ -129,7 +98,6 @@ def stream_song(youtube_id):
     )
 
 
-# ── LOG PLAY ──────────────────────────────────────
 @music_bp.route('/history', methods=['POST'])
 def add_to_history():
     user, err, code = require_auth()
@@ -145,7 +113,7 @@ def add_to_history():
 
     if not song_id and youtube_id:
         legacy_song = query_pg(
-            "SELECT id FROM songs WHERE youtube_id = ?",
+            "SELECT id FROM songs WHERE youtube_id = %s",
             (youtube_id,), one=True
         )
         if not legacy_song:
@@ -160,7 +128,7 @@ def add_to_history():
                     youtube_like_count=metadata.get('youtube_like_count', 0),
                 )
             legacy_song = query_pg(
-                "SELECT id FROM songs WHERE youtube_id = ?",
+                "SELECT id FROM songs WHERE youtube_id = %s",
                 (youtube_id,), one=True
             )
         if legacy_song:
@@ -170,52 +138,41 @@ def add_to_history():
     return jsonify({'success': True})
 
 
-# ── GET HISTORY ───────────────────────────────────
 @music_bp.route('/history', methods=['GET'])
 def get_history():
     user, err, code = require_auth()
     if err:
         return err, code
-
     history = get_listening_history(user['id'])
     return jsonify({'history': history})
 
 
-# ── DELETE HISTORY ITEM ───────────────────────────
 @music_bp.route('/history/<int:history_id>', methods=['DELETE'])
 def delete_history_item(history_id):
     user, err, code = require_auth()
     if err:
         return err, code
-
     execute_pg(
-        "DELETE FROM listening_history WHERE id = ? AND user_id = ?",
+        "DELETE FROM listening_history WHERE id = %s AND user_id = %s",
         (history_id, user['id'])
     )
     return jsonify({'success': True})
 
 
-# ── CLEAR HISTORY ─────────────────────────────────
 @music_bp.route('/history/all', methods=['DELETE'])
 def clear_history():
     user, err, code = require_auth()
     if err:
         return err, code
-
-    execute_pg(
-        "DELETE FROM listening_history WHERE user_id = ?",
-        (user['id'],)
-    )
+    execute_pg("DELETE FROM listening_history WHERE user_id = %s", (user['id'],))
     return jsonify({'success': True})
 
 
-# ── LIKED SONGS ───────────────────────────────────
 @music_bp.route('/liked', methods=['GET'])
 def get_liked():
     user, err, code = require_auth()
     if err:
         return err, code
-
     songs = get_liked_songs(user['id'])
     return jsonify({'songs': songs})
 
@@ -225,21 +182,19 @@ def like_song(song_id):
     user, err, code = require_auth()
     if err:
         return err, code
-
     try:
         execute_pg(
-            "INSERT OR IGNORE INTO liked_songs (user_id, song_id) VALUES (?, ?)",
+            """INSERT INTO liked_songs (user_id, song_id)
+               VALUES (%s, %s) ON CONFLICT DO NOTHING""",
             (user['id'], song_id)
         )
         execute_pg(
-            """INSERT OR IGNORE INTO feed_activity
-               (user_id, song_id, activity_type)
-               VALUES (?, ?, 'like')""",
+            """INSERT INTO feed_activity (user_id, song_id, activity_type)
+               VALUES (%s, %s, 'like') ON CONFLICT DO NOTHING""",
             (user['id'], song_id)
         )
     except Exception as e:
         return jsonify({'error': str(e)}), 400
-
     return jsonify({'success': True, 'liked': True})
 
 
@@ -248,27 +203,19 @@ def unlike_song(song_id):
     user, err, code = require_auth()
     if err:
         return err, code
-
+    execute_pg("DELETE FROM liked_songs WHERE user_id = %s AND song_id = %s", (user['id'], song_id))
     execute_pg(
-        "DELETE FROM liked_songs WHERE user_id = ? AND song_id = ?",
-        (user['id'], song_id)
-    )
-    execute_pg(
-        """DELETE FROM feed_activity
-           WHERE user_id = ? AND song_id = ?
-           AND activity_type = 'like'""",
+        "DELETE FROM feed_activity WHERE user_id = %s AND song_id = %s AND activity_type = 'like'",
         (user['id'], song_id)
     )
     return jsonify({'success': True, 'liked': False})
 
 
-# ── DOWNLOADS ─────────────────────────────────────
 @music_bp.route('/downloads', methods=['GET'])
 def get_downloads_route():
     user, err, code = require_auth()
     if err:
         return err, code
-
     songs = get_downloads(user['id'])
     return jsonify({'songs': songs})
 
@@ -278,24 +225,19 @@ def download_song(song_id):
     user, err, code = require_auth()
     if err:
         return err, code
-
     count = query_pg(
-        "SELECT COUNT(*) as cnt FROM downloads WHERE user_id = ?",
+        "SELECT COUNT(*) as cnt FROM downloads WHERE user_id = %s",
         (user['id'],), one=True
     )
     if count and count['cnt'] >= 100:
-        return jsonify({
-            'error': 'Download limit reached (100 songs)'
-        }), 400
-
+        return jsonify({'error': 'Download limit reached (100 songs)'}), 400
     try:
         execute_pg(
-            "INSERT OR IGNORE INTO downloads (user_id, song_id) VALUES (?, ?)",
+            "INSERT INTO downloads (user_id, song_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
             (user['id'], song_id)
         )
     except Exception as e:
         return jsonify({'error': str(e)}), 400
-
     return jsonify({'success': True})
 
 
@@ -304,27 +246,21 @@ def remove_download(song_id):
     user, err, code = require_auth()
     if err:
         return err, code
-
-    execute_pg(
-        "DELETE FROM downloads WHERE user_id = ? AND song_id = ?",
-        (user['id'], song_id)
-    )
+    execute_pg("DELETE FROM downloads WHERE user_id = %s AND song_id = %s", (user['id'], song_id))
     return jsonify({'success': True})
 
 
-# ── PLAYLISTS ─────────────────────────────────────
 @music_bp.route('/playlists', methods=['GET'])
 def get_playlists():
     user, err, code = require_auth()
     if err:
         return err, code
-
     rows = query_pg(
         """SELECT p.*,
            (SELECT COUNT(*) FROM playlist_songs
             WHERE playlist_id = p.id) as song_count
            FROM playlists p
-           WHERE p.owner_id = ? AND p.is_shared = 0
+           WHERE p.owner_id = %s AND p.is_shared = FALSE
            ORDER BY p.created_at DESC""",
         (user['id'],)
     )
@@ -336,14 +272,12 @@ def create_playlist():
     user, err, code = require_auth()
     if err:
         return err, code
-
     data = request.get_json()
     name = (data.get('name') or '').strip()
     if not name:
         return jsonify({'error': 'Playlist name required'}), 400
-
     playlist_id = execute_pg(
-        "INSERT INTO playlists (owner_id, name) VALUES (?, ?)",
+        "INSERT INTO playlists (owner_id, name) VALUES (%s, %s) RETURNING id",
         (user['id'], name)
     )
     return jsonify({'success': True, 'id': playlist_id}), 201
@@ -354,28 +288,21 @@ def get_playlist(playlist_id):
     user, err, code = require_auth()
     if err:
         return err, code
-
     playlist = query_pg(
-        """SELECT * FROM playlists
-           WHERE id = ? AND (owner_id = ? OR shared_with_id = ?)""",
+        "SELECT * FROM playlists WHERE id = %s AND (owner_id = %s OR shared_with_id = %s)",
         (playlist_id, user['id'], user['id']), one=True
     )
     if not playlist:
         return jsonify({'error': 'Playlist not found'}), 404
-
     songs = query_pg(
         """SELECT s.*, ps.position, ps.added_by
            FROM playlist_songs ps
            JOIN songs s ON ps.song_id = s.id
-           WHERE ps.playlist_id = ?
+           WHERE ps.playlist_id = %s
            ORDER BY ps.position""",
         (playlist_id,)
     )
-
-    return jsonify({
-        'playlist': row_to_dict(playlist),
-        'songs': rows_to_list(songs)
-    })
+    return jsonify({'playlist': row_to_dict(playlist), 'songs': rows_to_list(songs)})
 
 
 @music_bp.route('/playlists/<int:playlist_id>', methods=['PUT'])
@@ -383,14 +310,12 @@ def update_playlist(playlist_id):
     user, err, code = require_auth()
     if err:
         return err, code
-
     data = request.get_json()
     name = (data.get('name') or '').strip()
     if not name:
         return jsonify({'error': 'Name required'}), 400
-
     execute_pg(
-        "UPDATE playlists SET name = ? WHERE id = ? AND owner_id = ?",
+        "UPDATE playlists SET name = %s WHERE id = %s AND owner_id = %s",
         (name, playlist_id, user['id'])
     )
     return jsonify({'success': True})
@@ -401,89 +326,71 @@ def delete_playlist(playlist_id):
     user, err, code = require_auth()
     if err:
         return err, code
-
     execute_pg(
-        "DELETE FROM playlists WHERE id = ? AND owner_id = ?",
+        "DELETE FROM playlists WHERE id = %s AND owner_id = %s",
         (playlist_id, user['id'])
     )
     return jsonify({'success': True})
 
 
-@music_bp.route('/playlists/<int:playlist_id>/songs',
-                methods=['POST'])
+@music_bp.route('/playlists/<int:playlist_id>/songs', methods=['POST'])
 def add_to_playlist(playlist_id):
     user, err, code = require_auth()
     if err:
         return err, code
-
     data = request.get_json()
     song_id = data.get('song_id')
     if not song_id:
         return jsonify({'error': 'song_id required'}), 400
-
     position = query_pg(
-        """SELECT COUNT(*) as cnt FROM playlist_songs
-           WHERE playlist_id = ?""",
+        "SELECT COUNT(*) as cnt FROM playlist_songs WHERE playlist_id = %s",
         (playlist_id,), one=True
     )['cnt']
-
     execute_pg(
-        """INSERT OR IGNORE INTO playlist_songs
-           (playlist_id, song_id, added_by, position)
-           VALUES (?, ?, ?, ?)""",
+        """INSERT INTO playlist_songs (playlist_id, song_id, added_by, position)
+           VALUES (%s, %s, %s, %s) ON CONFLICT DO NOTHING""",
         (playlist_id, song_id, user['id'], position)
     )
     return jsonify({'success': True})
 
 
-@music_bp.route(
-    '/playlists/<int:playlist_id>/songs/<int:song_id>',
-    methods=['DELETE']
-)
+@music_bp.route('/playlists/<int:playlist_id>/songs/<int:song_id>', methods=['DELETE'])
 def remove_from_playlist(playlist_id, song_id):
     user, err, code = require_auth()
     if err:
         return err, code
-
     execute_pg(
-        """DELETE FROM playlist_songs
-           WHERE playlist_id = ? AND song_id = ?""",
+        "DELETE FROM playlist_songs WHERE playlist_id = %s AND song_id = %s",
         (playlist_id, song_id)
     )
     return jsonify({'success': True})
 
 
-# ── SHARED PLAYLISTS ──────────────────────────────
 @music_bp.route('/shared-playlists', methods=['GET'])
 def get_shared_playlists():
     user, err, code = require_auth()
     if err:
         return err, code
-
     rows = query_pg(
         """SELECT p.*,
            (SELECT COUNT(*) FROM playlist_songs
             WHERE playlist_id = p.id) as song_count
            FROM playlists p
-           WHERE p.is_shared = 1
-           AND (p.owner_id = ? OR p.shared_with_id = ?)
+           WHERE p.is_shared = TRUE
+           AND (p.owner_id = %s OR p.shared_with_id = %s)
            ORDER BY p.created_at DESC""",
         (user['id'], user['id'])
     )
     return jsonify({'playlists': rows_to_list(rows)})
 
 
-@music_bp.route('/shared-playlists/<int:playlist_id>',
-                methods=['DELETE'])
+@music_bp.route('/shared-playlists/<int:playlist_id>', methods=['DELETE'])
 def delete_shared_playlist(playlist_id):
     user, err, code = require_auth()
     if err:
         return err, code
-
     execute_pg(
-        """DELETE FROM playlists
-           WHERE id = ?
-           AND (owner_id = ? OR shared_with_id = ?)""",
+        "DELETE FROM playlists WHERE id = %s AND (owner_id = %s OR shared_with_id = %s)",
         (playlist_id, user['id'], user['id'])
     )
     return jsonify({'success': True})
