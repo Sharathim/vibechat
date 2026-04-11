@@ -323,3 +323,38 @@ def verify_google_login_token(id_token: str) -> tuple[dict, str]:
             f'firebase_error={firebase_error}; '
             f'google_oauth_error={e}'
         )
+
+def refresh_certs_background():
+    """
+    Background greenthread that refreshes Firebase and Google certs
+    every 6 hours so cached keys never go stale.
+    """
+    import eventlet
+    REFRESH_INTERVAL = 6 * 60 * 60  # 6 hours in seconds
+
+    while True:
+        eventlet.sleep(REFRESH_INTERVAL)
+        print("🔄 Refreshing Firebase/Google certs in background...")
+        try:
+            global _firebase_public_keys, _google_public_keys
+
+            # Refresh Firebase certs
+            try:
+                firebase_certs = _fetch_certs_with_retry(FIREBASE_CERTS_URL)
+                _save_certs_to_disk(firebase_certs, FIREBASE_CERTS_CACHE_PATH)
+                _firebase_public_keys = _parse_pem_certs_to_keys(firebase_certs)
+                print("✅ Firebase certs refreshed successfully")
+            except Exception as e:
+                print(f"⚠️  Background Firebase cert refresh failed: {e}")
+
+            # Refresh Google OAuth certs
+            if GOOGLE_CLIENT_ID:
+                try:
+                    google_certs = _fetch_certs_with_retry(GOOGLE_CERTS_URL)
+                    _google_public_keys = _parse_pem_certs_to_keys(google_certs)
+                    print("✅ Google OAuth certs refreshed successfully")
+                except Exception as e:
+                    print(f"⚠️  Background Google cert refresh failed: {e}")
+
+        except Exception as e:
+            print(f"❌ Unexpected error in cert refresh background task: {e}")
