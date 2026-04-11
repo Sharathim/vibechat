@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, session
 from .helpers import get_user_settings, get_blocked_users
 from modules.auth.helpers import get_current_user, hash_password, check_password
 from modules.auth.validators import validate_password
-from database.db import execute_db, query_db
+from database.pg_db import execute_db, query_db
 
 settings_bp = Blueprint('settings', __name__)
 
@@ -228,13 +228,13 @@ def change_email():
     data = request.get_json()
     new_email = (data.get('email') or '').strip().lower()
 
-    from modules.auth.validators import validate_gmail
-    valid, msg = validate_gmail(new_email)
+    from modules.auth.validators import validate_email
+    valid, msg = validate_email(new_email)
     if not valid:
         return jsonify({'error': msg}), 400
 
     existing = query_db(
-        "SELECT id FROM users WHERE gmail = ? AND id != ?",
+        "SELECT id FROM users WHERE email = ? AND id != ?",
         (new_email, user['id']), one=True
     )
     if existing:
@@ -243,7 +243,7 @@ def change_email():
         }), 400
 
     execute_db(
-        "UPDATE users SET gmail = ? WHERE id = ?",
+        "UPDATE users SET email = ? WHERE id = ?",
         (new_email, user['id'])
     )
 

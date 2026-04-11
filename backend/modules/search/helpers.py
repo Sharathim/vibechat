@@ -1,4 +1,4 @@
-from database.db import execute_db, query_db, rows_to_list
+from database.pg_db import execute_db, query_db, rows_to_list
 
 def get_search_history(user_id, search_type, limit=5):
     if search_type == 'song':

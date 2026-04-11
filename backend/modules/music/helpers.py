@@ -1,5 +1,4 @@
-from database.db import execute_db, query_db, row_to_dict, rows_to_list
-from database.pg_db import execute_pg, query_pg
+from database.pg_db import execute_pg, query_pg, row_to_dict, rows_to_list
 
 
 def _normalize_tags(tags):
@@ -10,82 +9,67 @@ def _normalize_tags(tags):
     return [str(tag).strip() for tag in tags if str(tag).strip()]
 
 
-def ensure_song_record(youtube_id, title, tags,
-                       duration, thumbnail_url,
-                       youtube_like_count=0):
-    tags = _normalize_tags(tags)
+def ensure_song_record(youtube_id, title, artist=None,
+                       duration=0, thumbnail_url='',
+                       youtube_like_count=0, tags=None):
+    normalized_tags = _normalize_tags(tags)
+    normalized_artist = artist
+
+    if isinstance(artist, (list, tuple)) and not tags:
+        normalized_tags = _normalize_tags(artist)
+        normalized_artist = normalized_tags[0] if normalized_tags else 'Unknown'
+
+    if not normalized_artist:
+        normalized_artist = normalized_tags[0] if normalized_tags else 'Unknown'
+
+    execute_pg(
+        """INSERT INTO songs
+           (youtube_id, title, artist, duration, thumbnail_url,
+            s3_audio_url, tags, youtube_like_count)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+           ON CONFLICT (youtube_id) DO UPDATE SET
+               title = EXCLUDED.title,
+               artist = EXCLUDED.artist,
+               duration = EXCLUDED.duration,
+               thumbnail_url = EXCLUDED.thumbnail_url,
+               tags = COALESCE(EXCLUDED.tags, songs.tags),
+               youtube_like_count = COALESCE(EXCLUDED.youtube_like_count, songs.youtube_like_count)""",
+        (
+            youtube_id,
+            title,
+            normalized_artist,
+            int(duration or 0),
+            thumbnail_url,
+            None,
+            normalized_tags,
+            int(youtube_like_count or 0),
+        )
+    )
 
     pg_song = query_pg(
         "SELECT * FROM songs WHERE youtube_id = %s",
         (youtube_id,), one=True
     )
 
-    if not pg_song:
-        execute_pg(
-            """INSERT INTO songs
-               (youtube_id, title, thumbnail_url, tags,
-                youtube_like_count, duration)
-               VALUES (%s, %s, %s, %s, %s, %s)
-               ON CONFLICT (youtube_id) DO NOTHING""",
-            (youtube_id, title, thumbnail_url, tags,
-             int(youtube_like_count or 0), int(duration or 0))
-        )
-        pg_song = query_pg(
-            "SELECT * FROM songs WHERE youtube_id = %s",
-            (youtube_id,), one=True
-        )
-
-    legacy_song = query_db(
-        "SELECT * FROM songs WHERE youtube_id = ?",
-        (youtube_id,), one=True
-    )
-
-    if not legacy_song:
-        legacy_artist = tags[0] if tags else 'Unknown'
-        execute_db(
-            """INSERT OR IGNORE INTO songs
-               (youtube_id, title, artist, duration,
-                thumbnail_url, s3_audio_url)
-               VALUES (?, ?, ?, ?, ?, NULL)""",
-            (youtube_id, title, legacy_artist,
-             int(duration or 0), thumbnail_url)
-        )
-        legacy_song = query_db(
-            "SELECT * FROM songs WHERE youtube_id = ?",
-            (youtube_id,), one=True
-        )
-
-    legacy_data = row_to_dict(legacy_song) if legacy_song else {
-        'id': None,
-        'youtube_id': youtube_id,
-        'title': title,
-        'artist': tags[0] if tags else 'Unknown',
-        'duration': int(duration or 0),
-        'thumbnail_url': thumbnail_url,
-        's3_audio_url': None,
-    }
-
-    return {
-        'pg_song': pg_song,
-        'legacy_song': legacy_data,
-    }
+    return row_to_dict(pg_song)
 
 
-def get_or_create_song(youtube_id, title, tags,
-                       duration, thumbnail_url,
-                       youtube_like_count=0):
+def get_or_create_song(youtube_id, title, artist=None,
+                       duration=0, thumbnail_url='',
+                       youtube_like_count=0, tags=None):
     return ensure_song_record(
         youtube_id=youtube_id,
         title=title,
-        tags=tags,
+        artist=artist,
         duration=duration,
         thumbnail_url=thumbnail_url,
         youtube_like_count=youtube_like_count,
+        tags=tags,
     )
 
 
 def get_liked_songs(user_id):
-    rows = query_db(
+    rows = query_pg(
         """SELECT s.*, ls.liked_at
            FROM liked_songs ls
            JOIN songs s ON ls.song_id = s.id
@@ -97,7 +81,7 @@ def get_liked_songs(user_id):
 
 
 def get_downloads(user_id):
-    rows = query_db(
+    rows = query_pg(
         """SELECT s.*, d.downloaded_at
            FROM downloads d
            JOIN songs s ON d.song_id = s.id
@@ -109,7 +93,7 @@ def get_downloads(user_id):
 
 
 def get_listening_history(user_id, limit=50):
-    rows = query_db(
+    rows = query_pg(
         """SELECT s.*, lh.played_at, lh.id as history_id
            FROM listening_history lh
            JOIN songs s ON lh.song_id = s.id
@@ -122,14 +106,14 @@ def get_listening_history(user_id, limit=50):
 
 
 def log_play(user_id, song_id):
-    execute_db(
+    execute_pg(
         """INSERT INTO listening_history (user_id, song_id)
            VALUES (?, ?)""",
         (user_id, song_id)
     )
 
     # Also add to feed activity
-    execute_db(
+    execute_pg(
         """INSERT OR IGNORE INTO feed_activity
            (user_id, song_id, activity_type)
            VALUES (?, ?, 'listen')""",

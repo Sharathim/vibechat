@@ -1,4 +1,4 @@
-from database.db import execute_db, query_db, row_to_dict, rows_to_list
+from database.pg_db import execute_db, query_db, row_to_dict, rows_to_list
 from datetime import datetime
 
 def get_or_create_conversation(user1_id, user2_id):

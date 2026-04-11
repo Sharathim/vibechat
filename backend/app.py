@@ -11,7 +11,6 @@ from flask import Flask
 from flask_cors import CORS
 from config import Config
 from extensions import socketio, bcrypt
-from database.db import init_db
 from database.pg_db import init_pg_db
 from firebase_config import load_all_certs
 
@@ -74,7 +73,6 @@ def create_app():
         return {'status': 'ok', 'message': 'VibeChat API running'}
 
     # Initialize databases
-    init_db()
     init_pg_db()
 
     # Pre-load Firebase/Google public keys for offline token verification

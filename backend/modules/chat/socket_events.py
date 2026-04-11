@@ -1,6 +1,6 @@
 from flask import request
 from flask_socketio import join_room, leave_room, emit
-from database.db import query_db
+from database.pg_db import query_db
 from .helpers import send_message, mark_messages_read
 
 # Track online users: {user_id: socket_id}

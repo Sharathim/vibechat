@@ -1,4 +1,4 @@
-from database.db import execute_db, query_db, row_to_dict
+from database.pg_db import execute_db, query_db, row_to_dict
 
 def get_user_settings(user_id):
     settings = query_db(
@@ -8,7 +8,7 @@ def get_user_settings(user_id):
     return row_to_dict(settings)
 
 def get_blocked_users(user_id):
-    from database.db import rows_to_list
+    from database.pg_db import rows_to_list
     rows = query_db(
         """SELECT u.id, u.userid, u.name,
                   p.avatar_url, bu.created_at
@@ -19,5 +19,5 @@ def get_blocked_users(user_id):
            ORDER BY bu.created_at DESC""",
         (user_id,)
     )
-    from database.db import rows_to_list
+    from database.pg_db import rows_to_list
     return rows_to_list(rows)

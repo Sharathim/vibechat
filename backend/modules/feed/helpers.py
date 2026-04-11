@@ -1,4 +1,4 @@
-from database.db import query_db, rows_to_list
+from database.pg_db import query_pg, rows_to_list
 from datetime import datetime, timedelta
 
 def get_feed(user_id, limit=20, offset=0):
@@ -6,7 +6,7 @@ def get_feed(user_id, limit=20, offset=0):
         datetime.utcnow() - timedelta(days=7)
     ).isoformat()
 
-    rows = query_db(
+    rows = query_pg(
         """SELECT
              fa.song_id,
              s.youtube_id,
@@ -16,7 +16,7 @@ def get_feed(user_id, limit=20, offset=0):
              s.duration,
              COUNT(DISTINCT fa.user_id) as like_count,
              MAX(fa.created_at) as latest_activity,
-             GROUP_CONCAT(DISTINCT fa.activity_type)
+             STRING_AGG(DISTINCT fa.activity_type, ',')
                  as activity_types,
              CASE WHEN ls.song_id IS NOT NULL
                   THEN 1 ELSE 0 END as is_liked

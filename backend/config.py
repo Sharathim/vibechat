@@ -12,11 +12,8 @@ class Config:
     SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key')
     FLASK_ENV = os.getenv('FLASK_ENV', 'development')
 
-    # Database (SQLite — existing app data)
-    DATABASE_PATH = os.getenv('DATABASE_PATH', 'database/vibechat.db')
-
-    # PostgreSQL Auth Database
-    DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://vibechat:vibechat_secret@localhost:5432/vibechat_auth')
+    # PostgreSQL application database
+    DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://vibechat:vibechat_secret@localhost:5432/vibechat')
 
     # Email
     MAIL_EMAIL = os.getenv('MAIL_EMAIL', '')

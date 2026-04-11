@@ -4,7 +4,7 @@ from .helpers import (
     get_messages, send_message, mark_messages_read
 )
 from modules.auth.helpers import get_current_user
-from database.db import execute_db, query_db
+from database.pg_db import execute_db, query_db
 
 chat_bp = Blueprint('chat', __name__)
 

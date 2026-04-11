@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify, session
 from modules.auth.helpers import get_current_user
-from database.db import execute_db, query_db, rows_to_list
+from database.pg_db import execute_db, query_db, rows_to_list
 
 notifications_bp = Blueprint('notifications', __name__)
 

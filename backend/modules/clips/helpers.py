@@ -1,4 +1,4 @@
-from database.db import execute_db, query_db, rows_to_list
+from database.pg_db import execute_db, query_db, rows_to_list
 from datetime import datetime, timedelta
 
 def get_active_clips(user_id):

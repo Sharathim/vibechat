@@ -7,7 +7,7 @@ from .helpers import (
     get_vibe_recaps
 )
 from modules.auth.helpers import get_current_user
-from database.db import query_db, execute_db
+from database.pg_db import query_db, execute_db
 
 vibe_bp = Blueprint('vibe', __name__)
 

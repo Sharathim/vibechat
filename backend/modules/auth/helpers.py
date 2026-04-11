@@ -34,7 +34,7 @@ def is_username_taken(username):
     if username.lower() in RESERVED_USERNAMES:
         return True
     user = query_pg(
-        "SELECT id FROM users WHERE username = %s",
+        "SELECT id FROM users WHERE userid = %s",
         (username.lower(),),
         one=True,
     )
@@ -79,8 +79,7 @@ def get_user_by_id(user_id):
     """Get a user by their primary key id."""
     return query_pg(
         """SELECT id, google_id, email, name,
-                  username AS userid,
-                  username,
+                  userid,
                   created_at
            FROM users WHERE id = %s""",
         (user_id,),
@@ -91,10 +90,18 @@ def get_user_by_id(user_id):
 def create_user(google_id, email, name, username, password_hash):
     """Insert a new user into PostgreSQL, returns the user id."""
     user_id = execute_pg(
-        """INSERT INTO users (google_id, email, name, username, password)
+        """INSERT INTO users (google_id, email, name, userid, password_hash)
            VALUES (%s, %s, %s, %s, %s)
            RETURNING id""",
         (google_id, email.lower(), name, username.lower(), password_hash),
+    )
+    execute_pg(
+        "INSERT INTO profiles (user_id) VALUES (%s) ON CONFLICT DO NOTHING",
+        (user_id,)
+    )
+    execute_pg(
+        "INSERT INTO user_settings (user_id) VALUES (%s) ON CONFLICT DO NOTHING",
+        (user_id,)
     )
     return user_id
 

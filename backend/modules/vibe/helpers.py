@@ -1,4 +1,4 @@
-from database.db import execute_db, query_db, row_to_dict, rows_to_list
+from database.pg_db import execute_db, query_db, row_to_dict, rows_to_list
 from datetime import datetime
 
 def create_vibe_session(conversation_id, host_user_id, is_cohost=False):

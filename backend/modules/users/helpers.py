@@ -1,4 +1,4 @@
-from database.db import execute_db, query_db, row_to_dict, rows_to_list
+from database.pg_db import execute_db, query_db, row_to_dict, rows_to_list
 
 def get_user_profile(userid, current_user_id=None):
     user = query_db(

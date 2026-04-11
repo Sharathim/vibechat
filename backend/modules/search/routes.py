@@ -6,7 +6,7 @@ from .helpers import (
 from modules.music.youtube_api import search_songs
 from modules.music.helpers import get_or_create_song
 from modules.auth.helpers import get_current_user
-from database.db import query_db, rows_to_list
+from database.pg_db import query_db, rows_to_list
 
 search_bp = Blueprint('search', __name__)
 

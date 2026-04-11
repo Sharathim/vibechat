@@ -4,8 +4,7 @@ from .helpers import (
     get_downloads, get_listening_history, log_play
 )
 from .ytdlp import get_audio_url, get_song_info
-from database.db import execute_db, query_db, row_to_dict, rows_to_list
-from database.pg_db import query_pg
+from database.pg_db import execute_pg, query_pg, row_to_dict, rows_to_list
 from modules.auth.helpers import get_current_user
 import requests as req
 
@@ -56,14 +55,15 @@ def stream_song(youtube_id):
             ensure_song_record(
                 youtube_id=metadata['youtube_id'],
                 title=metadata['title'],
-                tags=metadata.get('tags', []),
+                artist=metadata.get('artist') or metadata.get('tags', []),
                 duration=metadata.get('duration', 0),
                 thumbnail_url=metadata.get('thumbnail_url', ''),
                 youtube_like_count=metadata.get('youtube_like_count', 0),
+                tags=metadata.get('tags', []),
             )
 
     # Check DB for cached S3 URL first
-    song = query_db(
+    song = query_pg(
         """SELECT * FROM songs 
            WHERE youtube_id = ? OR CAST(id AS TEXT) = ?""",
         (youtube_id, youtube_id), one=True
@@ -144,7 +144,7 @@ def add_to_history():
         return jsonify({'error': 'song_id required'}), 400
 
     if not song_id and youtube_id:
-        legacy_song = query_db(
+        legacy_song = query_pg(
             "SELECT id FROM songs WHERE youtube_id = ?",
             (youtube_id,), one=True
         )
@@ -159,7 +159,7 @@ def add_to_history():
                     thumbnail_url=metadata.get('thumbnail_url', ''),
                     youtube_like_count=metadata.get('youtube_like_count', 0),
                 )
-            legacy_song = query_db(
+            legacy_song = query_pg(
                 "SELECT id FROM songs WHERE youtube_id = ?",
                 (youtube_id,), one=True
             )
@@ -188,7 +188,7 @@ def delete_history_item(history_id):
     if err:
         return err, code
 
-    execute_db(
+    execute_pg(
         "DELETE FROM listening_history WHERE id = ? AND user_id = ?",
         (history_id, user['id'])
     )
@@ -202,7 +202,7 @@ def clear_history():
     if err:
         return err, code
 
-    execute_db(
+    execute_pg(
         "DELETE FROM listening_history WHERE user_id = ?",
         (user['id'],)
     )
@@ -227,11 +227,11 @@ def like_song(song_id):
         return err, code
 
     try:
-        execute_db(
+        execute_pg(
             "INSERT OR IGNORE INTO liked_songs (user_id, song_id) VALUES (?, ?)",
             (user['id'], song_id)
         )
-        execute_db(
+        execute_pg(
             """INSERT OR IGNORE INTO feed_activity
                (user_id, song_id, activity_type)
                VALUES (?, ?, 'like')""",
@@ -249,11 +249,11 @@ def unlike_song(song_id):
     if err:
         return err, code
 
-    execute_db(
+    execute_pg(
         "DELETE FROM liked_songs WHERE user_id = ? AND song_id = ?",
         (user['id'], song_id)
     )
-    execute_db(
+    execute_pg(
         """DELETE FROM feed_activity
            WHERE user_id = ? AND song_id = ?
            AND activity_type = 'like'""",
@@ -279,7 +279,7 @@ def download_song(song_id):
     if err:
         return err, code
 
-    count = query_db(
+    count = query_pg(
         "SELECT COUNT(*) as cnt FROM downloads WHERE user_id = ?",
         (user['id'],), one=True
     )
@@ -289,7 +289,7 @@ def download_song(song_id):
         }), 400
 
     try:
-        execute_db(
+        execute_pg(
             "INSERT OR IGNORE INTO downloads (user_id, song_id) VALUES (?, ?)",
             (user['id'], song_id)
         )
@@ -305,7 +305,7 @@ def remove_download(song_id):
     if err:
         return err, code
 
-    execute_db(
+    execute_pg(
         "DELETE FROM downloads WHERE user_id = ? AND song_id = ?",
         (user['id'], song_id)
     )
@@ -319,7 +319,7 @@ def get_playlists():
     if err:
         return err, code
 
-    rows = query_db(
+    rows = query_pg(
         """SELECT p.*,
            (SELECT COUNT(*) FROM playlist_songs
             WHERE playlist_id = p.id) as song_count
@@ -342,7 +342,7 @@ def create_playlist():
     if not name:
         return jsonify({'error': 'Playlist name required'}), 400
 
-    playlist_id = execute_db(
+    playlist_id = execute_pg(
         "INSERT INTO playlists (owner_id, name) VALUES (?, ?)",
         (user['id'], name)
     )
@@ -355,7 +355,7 @@ def get_playlist(playlist_id):
     if err:
         return err, code
 
-    playlist = query_db(
+    playlist = query_pg(
         """SELECT * FROM playlists
            WHERE id = ? AND (owner_id = ? OR shared_with_id = ?)""",
         (playlist_id, user['id'], user['id']), one=True
@@ -363,7 +363,7 @@ def get_playlist(playlist_id):
     if not playlist:
         return jsonify({'error': 'Playlist not found'}), 404
 
-    songs = query_db(
+    songs = query_pg(
         """SELECT s.*, ps.position, ps.added_by
            FROM playlist_songs ps
            JOIN songs s ON ps.song_id = s.id
@@ -389,7 +389,7 @@ def update_playlist(playlist_id):
     if not name:
         return jsonify({'error': 'Name required'}), 400
 
-    execute_db(
+    execute_pg(
         "UPDATE playlists SET name = ? WHERE id = ? AND owner_id = ?",
         (name, playlist_id, user['id'])
     )
@@ -402,7 +402,7 @@ def delete_playlist(playlist_id):
     if err:
         return err, code
 
-    execute_db(
+    execute_pg(
         "DELETE FROM playlists WHERE id = ? AND owner_id = ?",
         (playlist_id, user['id'])
     )
@@ -421,13 +421,13 @@ def add_to_playlist(playlist_id):
     if not song_id:
         return jsonify({'error': 'song_id required'}), 400
 
-    position = query_db(
+    position = query_pg(
         """SELECT COUNT(*) as cnt FROM playlist_songs
            WHERE playlist_id = ?""",
         (playlist_id,), one=True
     )['cnt']
 
-    execute_db(
+    execute_pg(
         """INSERT OR IGNORE INTO playlist_songs
            (playlist_id, song_id, added_by, position)
            VALUES (?, ?, ?, ?)""",
@@ -445,7 +445,7 @@ def remove_from_playlist(playlist_id, song_id):
     if err:
         return err, code
 
-    execute_db(
+    execute_pg(
         """DELETE FROM playlist_songs
            WHERE playlist_id = ? AND song_id = ?""",
         (playlist_id, song_id)
@@ -460,7 +460,7 @@ def get_shared_playlists():
     if err:
         return err, code
 
-    rows = query_db(
+    rows = query_pg(
         """SELECT p.*,
            (SELECT COUNT(*) FROM playlist_songs
             WHERE playlist_id = p.id) as song_count
@@ -480,7 +480,7 @@ def delete_shared_playlist(playlist_id):
     if err:
         return err, code
 
-    execute_db(
+    execute_pg(
         """DELETE FROM playlists
            WHERE id = ?
            AND (owner_id = ? OR shared_with_id = ?)""",

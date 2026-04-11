@@ -4,7 +4,7 @@ from .helpers import (
     get_following, get_follow_requests
 )
 from modules.auth.helpers import get_current_user
-from database.db import execute_db, query_db, row_to_dict
+from database.pg_db import execute_db, query_db, row_to_dict
 import boto3
 import base64
 import uuid
