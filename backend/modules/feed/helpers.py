@@ -33,7 +33,7 @@ def get_feed(user_id, limit=20, offset=0):
            )
            WHERE fa.created_at >= ?
            AND fa.user_id != ?
-           GROUP BY fa.song_id
+           GROUP BY fa.song_id, s.youtube_id, s.title, s.artist, s.thumbnail_url, s.duration, ls.song_id
            ORDER BY latest_activity DESC
            LIMIT ? OFFSET ?""",
         (user_id, user_id, seven_days_ago,
