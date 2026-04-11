@@ -12,7 +12,7 @@ from flask_cors import CORS
 from config import Config
 from extensions import socketio, bcrypt
 from database.pg_db import init_pg_db
-from firebase_config import load_all_certs
+from firebase_config import load_all_certs, refresh_certs_background
 
 def create_app():
     app = Flask(__name__)
@@ -77,6 +77,7 @@ def create_app():
 
     # Pre-load Firebase/Google public keys for offline token verification
     load_all_certs()
+    eventlet.spawn(refresh_certs_background)
 
     return app
 
