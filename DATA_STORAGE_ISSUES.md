@@ -3,7 +3,7 @@
 Date: 2026-04-01
 
 ## Scope
-This report focuses on persistence/storage risks in backend and frontend code paths (database, credentials, sessions, and client-side storage).
+This report focuses on persistence/storage risks in backend and frontend code paths v(database, credentials, sessions, and client-side storage).
 
 ## High Severity
 
